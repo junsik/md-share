@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MarkdownView from "./MarkdownView";
 
 const DRAFT_KEY = "md-share:draft:v2";
@@ -209,6 +209,27 @@ export default function Editor() {
   const [preview, setPreview] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  // Which pane the user is actively scrolling; blocks echo events from the
+  // programmatic scroll on the other pane.
+  const scrollSource = useRef<"editor" | "preview" | null>(null);
+
+  function syncScroll(source: "editor" | "preview") {
+    if (scrollSource.current && scrollSource.current !== source) return;
+    scrollSource.current = source;
+    const from = source === "editor" ? editorRef.current : previewRef.current;
+    const to = source === "editor" ? previewRef.current : editorRef.current;
+    if (!from || !to) return;
+    const fromRange = from.scrollHeight - from.clientHeight;
+    const toRange = to.scrollHeight - to.clientHeight;
+    if (fromRange > 0 && toRange > 0) {
+      to.scrollTop = (from.scrollTop / fromRange) * toRange;
+    }
+    window.requestAnimationFrame(() => {
+      scrollSource.current = null;
+    });
+  }
 
   useEffect(() => {
     const draft = window.localStorage.getItem(DRAFT_KEY);
@@ -261,13 +282,19 @@ export default function Editor() {
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
         <textarea
+          ref={editorRef}
           value={markdown}
           onChange={(event) => setMarkdown(event.target.value)}
+          onScroll={() => syncScroll("editor")}
           spellCheck={false}
           placeholder="# Start writing markdown..."
           className="h-full w-full resize-none overflow-y-auto border-b border-border bg-background p-6 font-mono text-sm leading-6 text-foreground outline-none md:border-b-0 md:border-r"
         />
-        <div className="h-full overflow-y-auto bg-card p-8">
+        <div
+          ref={previewRef}
+          onScroll={() => syncScroll("preview")}
+          className="h-full overflow-y-auto bg-card p-8"
+        >
           <MarkdownView markdown={preview} />
         </div>
       </div>

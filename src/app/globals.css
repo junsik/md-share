@@ -42,3 +42,32 @@ body {
   max-width: 100%;
   height: auto;
 }
+
+/* Slim dark scrollbars matching the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #313945 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #313945;
+  border-radius: 8px;
+  border: 2px solid var(--background);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #414b5a;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
