@@ -1,0 +1,44 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --background: #0b0d10;
+  --foreground: #e6e9ee;
+  --panel: #14171c;
+  --panel-strong: #1b2028;
+  --border: #262c35;
+  --muted: #8b94a1;
+  --muted-strong: #b5bdc9;
+  --primary: #5b8def;
+  --primary-foreground: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--panel);
+  --color-border: var(--border);
+  --color-muted: var(--panel-strong);
+  --color-muted-foreground: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
