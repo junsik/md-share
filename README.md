@@ -43,6 +43,7 @@ to your messenger.
 | Env var | Default | Description |
 | --- | --- | --- |
 | `MD_SHARE_UPLOAD_TOKEN` | (unset) | Bearer token for upload/list APIs. **Required in production** — uploads are rejected (503) when unset. In development, auth is skipped when unset. |
+| `MD_SHARE_ALLOW_ANONYMOUS_UPLOADS` | `false` | Set to `true` to skip upload auth entirely. Only for trusted/internal networks. |
 | `MD_SHARE_DATA_DIR` | `./data` (`/data` in Docker) | Document storage directory. Mount a volume for persistence. |
 | `MD_SHARE_PUBLIC_BASE_URL` | (derived from request) | Base URL used in returned links; set it when running behind a reverse proxy that doesn't forward the public host. |
 | `MD_SHARE_DEFAULT_TTL_DAYS` | (keep forever) | Default retention when a request has no `ttlDays`. |

@@ -10,6 +10,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export function checkUploadAuth(request: Request): UploadAuthResult {
+  if (process.env.MD_SHARE_ALLOW_ANONYMOUS_UPLOADS === "true") return { ok: true };
   const token = process.env.MD_SHARE_UPLOAD_TOKEN;
   if (!token) {
     if (process.env.NODE_ENV !== "production") return { ok: true };
