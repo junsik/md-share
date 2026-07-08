@@ -1,7 +1,7 @@
 "use client";
 
 import { isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import MermaidBlock from "./MermaidBlock";
@@ -27,6 +27,17 @@ function Pre(props: ComponentProps<"pre">) {
   return <pre {...props} />;
 }
 
+// react-markdown's default transform strips all data: URIs (safe default —
+// data:text/html would be XSS). Self-contained documents legitimately embed
+// screenshots as data:image, so allow raster images on img src only:
+// clickable data: links and SVG (script-capable as a document) stay blocked.
+function urlTransform(url: string, key: string) {
+  if (key === "src" && /^data:image\/(png|jpeg|gif|webp);base64,/i.test(url)) {
+    return url;
+  }
+  return defaultUrlTransform(url);
+}
+
 export default function MarkdownView({ markdown }: { markdown: string }) {
   return (
     <article className="prose prose-invert max-w-none prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-border prose-code:before:content-none prose-code:after:content-none">
@@ -34,6 +45,7 @@ export default function MarkdownView({ markdown }: { markdown: string }) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }]]}
         components={{ pre: Pre }}
+        urlTransform={urlTransform}
       >
         {markdown}
       </ReactMarkdown>
