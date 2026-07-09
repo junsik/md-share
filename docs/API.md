@@ -96,6 +96,12 @@ No auth. Returns the bundled [agent skill](../skills/md-share/SKILL.md) as
 `text/markdown` with this instance's public URL substituted in — ready to save
 into an agent's skill directory or paste into its instructions.
 
+### `GET /api.md` — this document for this instance
+
+No auth. Returns this API reference as `text/markdown` with the instance's
+public URL substituted in, so every example is copy-paste runnable. The web
+UI's AI dialog renders it in place.
+
 ## Errors
 
 | Status | Body | Cause |

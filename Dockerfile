@@ -20,8 +20,10 @@ ENV MD_SHARE_DATA_DIR=/data
 WORKDIR /app
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-# Agent skill template served by GET /skill.md with the instance URL filled in.
+# Agent skill and API reference served by GET /skill.md and /api.md with the
+# instance URL filled in.
 COPY --from=builder /app/skills ./skills
+COPY --from=builder /app/docs/API.md ./docs/API.md
 RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 3000

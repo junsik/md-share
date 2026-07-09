@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import MarkdownView from "./MarkdownView";
 
 interface InstallTarget {
   label: string;
@@ -47,17 +48,76 @@ function CopyButton({ getText, label }: { getText: () => Promise<string>; label:
   );
 }
 
+async function fetchMarkdown(pathname: string): Promise<string> {
+  const response = await fetch(pathname);
+  if (!response.ok) throw new Error(`${pathname} fetch failed`);
+  return response.text();
+}
+
 function AiDialog({ onClose }: { onClose: () => void }) {
   const [origin, setOrigin] = useState("");
+  const [view, setView] = useState<"install" | "api">("install");
+  const [apiDoc, setApiDoc] = useState<string | null>(null);
+  const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
 
-  async function fetchSkill(): Promise<string> {
-    const response = await fetch("/skill.md");
-    if (!response.ok) throw new Error("skill fetch failed");
-    return response.text();
+  async function openApi() {
+    setView("api");
+    if (apiDoc != null) return;
+    try {
+      setApiDoc(await fetchMarkdown("/api.md"));
+    } catch {
+      setApiError(true);
+    }
+  }
+
+  if (view === "api") {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        onClick={onClose}
+      >
+        <div
+          className="flex max-h-full w-full max-w-3xl flex-col rounded-xl border border-border bg-card shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-border px-6 py-3">
+            <h2 className="text-lg font-semibold text-foreground">API reference</h2>
+            <div className="flex items-center gap-2">
+              {apiDoc != null ? (
+                <CopyButton label="Copy markdown" getText={() => Promise.resolve(apiDoc)} />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setView("install")}
+                className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            {apiError ? (
+              <p className="text-sm text-red-400">Failed to load the API reference.</p>
+            ) : apiDoc == null ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <MarkdownView markdown={apiDoc} />
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -100,7 +160,10 @@ function AiDialog({ onClose }: { onClose: () => void }) {
           <div>
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="font-medium text-foreground">Any other agent</span>
-              <CopyButton label="Copy skill markdown" getText={fetchSkill} />
+              <CopyButton
+                label="Copy skill markdown"
+                getText={() => fetchMarkdown("/skill.md")}
+              />
             </div>
             <p className="text-xs text-muted-foreground">
               Copies the full skill text — paste it into the agent&apos;s instructions
@@ -110,14 +173,13 @@ function AiDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="mt-5 flex items-center justify-between border-t border-border pt-4 text-sm">
-          <a
-            href="https://github.com/junsik/md-share/blob/main/docs/API.md"
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground underline hover:text-foreground"
+          <button
+            type="button"
+            onClick={openApi}
+            className="rounded border border-border px-3 py-1.5 text-muted-foreground hover:text-foreground"
           >
             API reference
-          </a>
+          </button>
           <button
             type="button"
             onClick={onClose}
