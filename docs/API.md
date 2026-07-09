@@ -90,6 +90,12 @@ No auth. `200` with `Content-Type: text/markdown; charset=utf-8`, or `404 not fo
 No auth. The human-facing HTML page. Not an API endpoint, but this is the link to
 put in chat messages.
 
+### `GET /skill.md` — agent skill for this instance
+
+No auth. Returns the bundled [agent skill](../skills/md-share/SKILL.md) as
+`text/markdown` with this instance's public URL substituted in — ready to save
+into an agent's skill directory or paste into its instructions.
+
 ## Errors
 
 | Status | Body | Cause |

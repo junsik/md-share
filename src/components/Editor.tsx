@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import AiButton from "./AiButton";
 import MarkdownView from "./MarkdownView";
 
 const DRAFT_KEY = "md-share:draft:v2";
@@ -264,6 +265,7 @@ export default function Editor() {
           md-share
         </h1>
         <div className="flex items-center gap-2">
+          <AiButton />
           <button
             type="button"
             onClick={download}

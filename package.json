@@ -1,6 +1,6 @@
 {
   "name": "md-share",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Self-hostable markdown rendering and sharing service — upload markdown, get a shareable rendered link",
   "license": "MIT",
   "author": "junsik",

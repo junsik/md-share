@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import AiButton from "@/components/AiButton";
 import MarkdownView from "@/components/MarkdownView";
 import { getDocument } from "@/lib/store";
 
@@ -32,6 +33,7 @@ export default async function DocumentPage({ params }: PageProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-foreground">{meta.title}</h1>
           <nav className="flex items-center gap-3 text-sm">
+            <AiButton />
             <a
               href={`/api/documents/${meta.id}/raw`}
               className="rounded border border-border bg-card px-3 py-1.5 text-muted-foreground hover:text-foreground"

@@ -17,15 +17,16 @@ the `url` to the user or channel.
 
 ## Configuration (set by whoever installs this skill)
 
-- **Base URL**: `MD_SHARE_URL` env var, or replace inline below.
-  <!-- INSTALL: replace https://md-share.example.com with your instance URL -->
+- **Base URL**: replace `https://md-share.example.com` below with your instance URL.
+  Skills fetched from a running instance's `GET /skill.md` endpoint have this
+  substituted already.
 - **Auth**: if the instance requires it, send `Authorization: Bearer $MD_SHARE_UPLOAD_TOKEN`.
   Instances with anonymous uploads enabled need no header.
 
 ## Upload
 
 ```bash
-curl -s -X POST "$MD_SHARE_URL/api/documents" \
+curl -s -X POST "https://md-share.example.com/api/documents" \
   -H "Content-Type: application/json; charset=utf-8" \
   --data-binary @payload.json
 ```
