@@ -27,6 +27,26 @@ function Pre(props: ComponentProps<"pre">) {
   return <pre {...props} />;
 }
 
+// GFM table rows are single lines, so `<br>` is the only way to break a line
+// inside a cell. Raw HTML stays unrendered for safety; convert just that one
+// tag into a real hard break before the HTML pass discards it.
+type MdastNode = { type: string; value?: string; children?: MdastNode[] };
+
+function remarkBrToBreak() {
+  return (tree: MdastNode) => {
+    const walk = (node: MdastNode) => {
+      if (!node.children) return;
+      node.children = node.children.map((child) =>
+        child.type === "html" && /^<br\s*\/?>$/i.test((child.value ?? "").trim())
+          ? { type: "break" }
+          : child,
+      );
+      node.children.forEach(walk);
+    };
+    walk(tree);
+  };
+}
+
 // react-markdown's default transform strips all data: URIs (safe default —
 // data:text/html would be XSS). Self-contained documents legitimately embed
 // screenshots as data:image, so allow raster images on img src only:
@@ -42,7 +62,7 @@ export default function MarkdownView({ markdown }: { markdown: string }) {
   return (
     <article className="prose prose-invert max-w-none prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-border prose-code:before:content-none prose-code:after:content-none">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBrToBreak]}
         rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }]]}
         components={{ pre: Pre }}
         urlTransform={urlTransform}
