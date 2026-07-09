@@ -1,0 +1,15 @@
+# md-share
+
+> Self-hostable markdown rendering and sharing service. Upload markdown via HTTP,
+> get back a link that renders it as a clean web page — for chat/messenger
+> workflows where raw .md files don't render.
+
+## Docs
+
+- [API reference](docs/API.md): endpoints, auth modes, request/response schemas, error codes, retention, what renders
+- [Agent skill](skills/md-share/SKILL.md): installable instructions teaching an AI agent to publish markdown through md-share
+- [README](README.md): overview, configuration, deployment
+
+## Optional
+
+- [Confluence macro plugin](https://github.com/junsik/md-share-confluence): renders md-share links (and .md attachments) on Confluence Server pages
