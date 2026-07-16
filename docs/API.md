@@ -1,138 +1,194 @@
 # md-share HTTP API
 
-Everything the web UI does goes through this API — it is the intended integration
-surface for scripts and AI agents. All requests and responses are UTF-8.
+md-share의 모든 문서 작업은 이 HTTP API를 사용한다. 요청과 응답은 UTF-8이며 문서 본문은
+최대 2 MiB다. 기계 판독 가능한 계약은
+[`/openapi.yaml`](https://md-share.example.com/openapi.yaml)에서 제공한다.
 
-## Authentication
+## 인증
 
-Upload/list endpoints check auth in this order:
+업로드, 목록과 상태 API는 다음 순서로 인증한다.
 
-| Mode | Server configuration | Client requirement |
+| 모드 | 서버 설정 | 클라이언트 요구사항 |
 | --- | --- | --- |
-| Anonymous | `MD_SHARE_ALLOW_ANONYMOUS_UPLOADS=true` | none |
-| Bearer token | `MD_SHARE_UPLOAD_TOKEN=<secret>` | `Authorization: Bearer <secret>` |
-| Development | neither set, `NODE_ENV != production` | none |
+| 익명 업로드 | `MD_SHARE_ALLOW_ANONYMOUS_UPLOADS=true` | 없음 |
+| Bearer token | `MD_SHARE_UPLOAD_TOKEN=<TOKEN>` | `Authorization: Bearer <TOKEN>` |
+| 개발 | 두 변수가 없고 `NODE_ENV != production` | 없음 |
 
-With neither variable set in production, uploads are disabled (fail-closed, `503`).
-Reading a document (`/d/{id}`, `/api/documents/{id}/raw`) never requires auth —
-anyone with the link can read.
+운영 환경에서 인증 모드가 설정되지 않으면 업로드는 `503`으로 거절된다. 렌더링 페이지,
+공개 메타데이터와 원문은 링크를 아는 사용자가 인증 없이 조회할 수 있다.
 
-## Endpoints
+문서 생성 응답은 문서별 `manageToken`을 한 번만 반환한다. 이 값은 서버에 평문으로
+저장되지 않으며, 만료 변경과 삭제 요청에서 Bearer token으로 사용한다.
 
-### `POST /api/documents` — upload markdown
+## 문서 생성
 
-Two request styles:
+### `POST /api/documents`
 
-**JSON** (recommended — no query-string escaping issues):
+JSON 요청:
 
 ```bash
 curl -X POST https://md-share.example.com/api/documents \
   -H "Content-Type: application/json; charset=utf-8" \
+  -H "Idempotency-Key: <STABLE_REQUEST_KEY>" \
   --data-binary @payload.json
 ```
 
 ```json
 {
-  "markdown": "# Report title\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n",
-  "title": "optional explicit title",
+  "markdown": "# Report title\n\n본문",
+  "title": "선택 제목",
+  "filename": "report.md",
   "ttlDays": 30
 }
 ```
 
-**Plain text** — the raw body is the markdown; options go in the query string:
+raw Markdown 요청:
 
 ```bash
-curl -X POST "https://md-share.example.com/api/documents?ttlDays=7" \
-  -H "Content-Type: text/plain; charset=utf-8" \
+curl -X POST \
+  "https://md-share.example.com/api/documents?filename=report.md&ttlDays=7" \
+  -H "Content-Type: text/markdown; charset=utf-8" \
+  -H "Idempotency-Key: <STABLE_REQUEST_KEY>" \
   --data-binary @report.md
 ```
 
-| Field | Type | Notes |
+| 입력 | 형식 | 설명 |
 | --- | --- | --- |
-| `markdown` | string, required | the document body; max 2 MiB (UTF-8 bytes) |
-| `title` | string, optional | defaults to the first `#`–`######` heading, else `Untitled` |
-| `ttlDays` | positive number, optional | defaults to `MD_SHARE_DEFAULT_TTL_DAYS`; if neither is set the document never expires |
+| `markdown` | string, 필수 | 비어 있지 않은 UTF-8 Markdown. NUL 문자는 허용하지 않는다. |
+| `title` | string, 선택 | 최대 200자. 없으면 첫 heading을 사용한다. |
+| `filename` | string, 선택 | 최대 255자의 파일명. 전달하면 `.md`만 허용하며 경로는 거절한다. |
+| `ttlDays` | 양수 또는 `null`, 선택 | 양수는 생성 시각 기준 만료 일수, `null`은 무기한, 생략은 서버 기본값이다. |
+| `Idempotency-Key` | header, 선택 | 최대 200자. 네트워크 실패 뒤 같은 요청을 안전하게 재시도할 때 사용한다. |
 
-**Response `201`:**
+최초 생성은 `201`을 반환한다.
 
 ```json
 {
   "id": "ndremUMOcwQp",
   "title": "Report title",
-  "createdAt": "2026-07-09T00:12:17.390Z",
-  "expiresAt": "2026-08-08T00:12:17.390Z",
-  "size": 44,
+  "originalFilename": "report.md",
+  "createdAt": "2026-07-16T10:00:00.000Z",
+  "expiresAt": "2026-07-23T10:00:00.000Z",
+  "size": 28,
   "url": "https://md-share.example.com/d/ndremUMOcwQp",
-  "rawUrl": "https://md-share.example.com/api/documents/ndremUMOcwQp/raw"
+  "rawUrl": "https://md-share.example.com/api/documents/ndremUMOcwQp/raw",
+  "replayed": false,
+  "manageToken": "<ONE_TIME_MANAGEMENT_TOKEN>"
 }
 ```
 
-Share `url` with humans (rendered page); `rawUrl` serves the original markdown
-(`text/markdown`) for machines and for the
-[Confluence macro](https://github.com/junsik/md-share-confluence).
-`expiresAt` is `null` for permanent documents.
+같은 key와 같은 요청의 재시도는 같은 문서를 `200`으로 반환한다. 이 응답은
+`replayed: true`이며 `manageToken`을 다시 포함하지 않는다. 같은 key에 다른 요청을 보내면
+`409 IDEMPOTENCY_CONFLICT`를 반환한다. 연결이 끊겨 응답을 받지 못했으면 key를 바꾸지 않고
+재시도해야 한다.
 
-### `GET /api/documents` — list recent documents
+## 문서 조회
 
-Same auth as upload. Returns up to 50 non-expired documents, newest first:
+### `GET /api/documents/{id}`
 
-```json
-{ "documents": [ { "id": "...", "title": "...", "createdAt": "...", "expiresAt": null, "size": 123, "url": "...", "rawUrl": "..." } ] }
+인증 없이 본문을 제외한 공개 메타데이터, `url`, `rawUrl`을 반환한다. 없는 문서와 만료된
+문서는 `404`다.
+
+### `GET /api/documents/{id}/raw`
+
+인증 없이 원문을 `text/markdown; charset=utf-8`로 반환한다. 생성 시 파일명이 전달되었으면
+`Content-Disposition`에 UTF-8 파일명으로 포함한다.
+
+### `GET /d/{id}`
+
+사용자에게 전달할 렌더링 페이지다. 제목과 Open Graph 메타데이터를 제공한다.
+
+### `GET /api/documents`
+
+업로드 인증이 필요하다. 만료되지 않은 최근 문서 최대 50건을 최신순으로 반환한다.
+응답은 본문과 관리 token을 포함하지 않는다.
+
+## 문서 관리
+
+관리 요청의 `Authorization`에는 생성 시 한 번 받은 문서별 `manageToken`을 사용한다.
+
+### `PATCH /api/documents/{id}`
+
+만료 시각을 현재 시각 기준으로 다시 설정한다.
+
+```bash
+curl -X PATCH https://md-share.example.com/api/documents/{id} \
+  -H "Authorization: Bearer <ONE_TIME_MANAGEMENT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"ttlDays": 7}'
 ```
 
-### `GET /api/documents/{id}/raw` — raw markdown
+`{"ttlDays": null}`은 무기한 보관으로 설정한다. 성공 시 갱신된 공개 메타데이터를
+반환한다.
 
-No auth. `200` with `Content-Type: text/markdown; charset=utf-8`, or `404 not found`
-(unknown **or expired** — expired documents are deleted on first access after expiry).
+### `DELETE /api/documents/{id}`
 
-### `GET /d/{id}` — rendered page
+```bash
+curl -X DELETE https://md-share.example.com/api/documents/{id} \
+  -H "Authorization: Bearer <ONE_TIME_MANAGEMENT_TOKEN>"
+```
 
-No auth. The human-facing HTML page. Not an API endpoint, but this is the link to
-put in chat messages.
+성공하면 `204`다. 이후 렌더링, 메타데이터와 원문 URL은 모두 `404`를 반환한다.
 
-### `GET /skill.md` — agent skill for this instance
+## 운영 상태
 
-No auth. Returns the bundled [agent skill](../skills/md-share/SKILL.md) as
-`text/markdown` with this instance's public URL substituted in — ready to save
-into an agent's skill directory or paste into its instructions.
+### `GET /api/status`
 
-### `GET /api.md` — this document for this instance
+업로드 인증이 필요하다. 본문 없이 활성 문서 수, 저장 bytes와 만료가 설정된 문서 수를
+반환한다.
 
-No auth. Returns this API reference as `text/markdown` with the instance's
-public URL substituted in, so every example is copy-paste runnable. The web
-UI's AI dialog renders it in place.
+```json
+{
+  "status": "ok",
+  "storage": { "documents": 12, "bytes": 48231, "expiringDocuments": 10 }
+}
+```
 
-## Errors
+## 에이전트용 문서
 
-| Status | Body | Cause |
+| 경로 | 설명 |
+| --- | --- |
+| `GET /skill.md` | 실행 중인 인스턴스 URL이 반영된 agent skill |
+| `GET /api.md` | 실행 중인 인스턴스 URL이 반영된 이 API 문서 |
+| `GET /openapi.yaml` | OpenAPI 3.1 계약 |
+| `GET /llms.txt` | 문서 탐색 index |
+
+## 오류 형식
+
+JSON 오류는 안정적인 `code`와 사람이 읽을 `message`를 함께 반환한다.
+
+```json
+{ "error": { "code": "UNSUPPORTED_FILE_TYPE", "message": "only .md files are supported" } }
+```
+
+| 상태 | 주요 code | 의미 |
 | --- | --- | --- |
-| `400` | `{"error": "invalid JSON body"}` | malformed JSON |
-| `400` | `{"error": "markdown must be a non-empty string"}` | missing/empty `markdown` field |
-| `400` | `{"error": "ttlDays must be a positive number"}` | zero/negative/non-numeric TTL |
-| `401` | `{"error": "invalid upload token"}` | bad or missing Bearer token |
-| `413` | `{"error": "markdown exceeds 2097152 bytes"}` | document over 2 MiB |
-| `503` | `{"error": "MD_SHARE_UPLOAD_TOKEN is not configured"}` | production with no auth mode configured |
+| `400` | `INVALID_JSON`, `INVALID_UTF8`, `EMPTY_MARKDOWN`, `BINARY_MARKDOWN`, `INVALID_FILENAME`, `UNSUPPORTED_FILE_TYPE`, `INVALID_TTL`, `INVALID_IDEMPOTENCY_KEY` | 요청 검증 실패 |
+| `401` | `UPLOAD_AUTH_FAILED`, `MANAGE_AUTH_REQUIRED` | 필요한 인증이 없거나 upload token이 맞지 않음 |
+| `403` | `MANAGE_AUTH_FAILED` | 문서 관리 token이 맞지 않음 |
+| `404` | `DOCUMENT_NOT_FOUND` | 문서가 없거나 만료됨 |
+| `409` | `IDEMPOTENCY_CONFLICT` | 같은 key를 다른 요청에 사용함 |
+| `410` | `IDEMPOTENCY_GONE` | key가 가리키는 문서가 삭제 또는 만료됨 |
+| `413` | `REQUEST_TOO_LARGE`, `DOCUMENT_TOO_LARGE` | 요청 또는 Markdown이 허용 크기를 초과함 |
+| `415` | `UNSUPPORTED_MEDIA_TYPE` | multipart 요청을 사용함 |
+| `503` | `IDEMPOTENCY_BUSY`, `STORAGE_UNAVAILABLE`, `UPLOAD_AUTH_FAILED` | 잠시 뒤 같은 key로 재시도할 수 있는 서버 상태 |
 
-## Retention
+`503` 재시도 가능 응답은 `Retry-After`를 포함한다.
 
-- Expired documents are removed lazily on access and by an hourly background sweep.
-- `expiresAt: null` means the document is kept until manually deleted from the data
-  directory.
+## 저장과 만료
 
-## What renders
+- 본문을 먼저 원자적으로 게시하고 메타데이터를 마지막에 게시하므로, 조회자는 완성된 문서만
+  볼 수 있다.
+- 프로세스 중단으로 남은 임시 파일과 고아 본문은 background sweep이 정리한다.
+- 만료된 문서는 첫 조회와 background sweep에서 삭제한다.
+- idempotency 기록은 문서 ID를 먼저 예약하므로 저장 중 중단되어도 같은 key의 재시도가 같은
+  문서 ID를 완성한다.
 
-- GitHub-flavored markdown: tables, task lists, strikethrough, fenced code blocks
-  with syntax highlighting.
-- `mermaid` fenced code blocks render as diagrams in the browser.
-- Raw HTML is **not** rendered (XSS-safe default), with one exception: `<br>`
-  becomes a real line break — it is the only way to break a line inside a GFM
-  table cell.
-- `data:image/png|jpeg|gif|webp;base64,...` image sources are allowed, so fully
-  self-contained documents (embedded screenshots) work. Other `data:` URIs stay
-  blocked.
+## 렌더링 계약
 
-## Tips for non-ASCII content
+- GFM 표, task list, 취소선과 syntax-highlighted fenced code block을 렌더링한다.
+- `mermaid` fenced code block은 브라우저에서 다이어그램으로 렌더링한다.
+- raw HTML은 렌더링하지 않는다. GFM 표 셀 줄바꿈에 필요한 `<br>`만 허용한다.
+- `data:image/png|jpeg|gif|webp;base64,...` 이미지는 허용하고 다른 `data:` URI는 차단한다.
 
-Send the markdown as a file (`--data-binary @file`) with an explicit
-`charset=utf-8` content type, as in the examples above. Inlining non-ASCII text
-into a shell argument corrupts it on some platforms (e.g. Windows consoles).
+한글 같은 비ASCII 본문은 셸 인자에 넣지 말고 UTF-8 파일을 `--data-binary @file`로 전송한다.

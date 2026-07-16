@@ -20,6 +20,8 @@ ENV MD_SHARE_DATA_DIR=/data
 WORKDIR /app
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/llms.txt ./public/llms.txt
 # Agent skill and API reference served by GET /skill.md and /api.md with the
 # instance URL filled in.
 COPY --from=builder /app/skills ./skills

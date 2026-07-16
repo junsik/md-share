@@ -1,0 +1,321 @@
+openapi: 3.1.0
+info:
+  title: md-share API
+  version: 1.0.0
+  description: Store immutable Markdown documents and return rendered share links.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /
+paths:
+  /api/documents:
+    post:
+      operationId: createDocument
+      summary: Upload a Markdown document
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+            maxLength: 200
+          description: Reuse for safe retries of the same request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentRequest"
+          text/markdown:
+            schema:
+              type: string
+      responses:
+        "201":
+          description: Document created. The management token is returned once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateDocumentResponse"
+        "200":
+          description: Idempotent replay of a completed request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateDocumentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: The idempotency key was used with another request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: The document created for the idempotency key is no longer available.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Request or Markdown body is too large.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Upload authentication is not configured, storage failed, or a key is busy.
+          headers:
+            Retry-After:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listDocuments
+      summary: List recent active documents
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        "200":
+          description: Up to 50 documents, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documents]
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DocumentWithUrls"
+        "401":
+          description: Upload authentication failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/documents/{id}:
+    parameters:
+      - $ref: "#/components/parameters/DocumentId"
+    get:
+      operationId: getDocumentMetadata
+      summary: Get public document metadata
+      security: []
+      responses:
+        "200":
+          description: Public metadata and URLs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentWithUrls"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateDocumentExpiry
+      summary: Change the expiry using the one-time management token
+      security:
+        - manageToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ttlDays]
+              properties:
+                ttlDays:
+                  oneOf:
+                    - type: number
+                      exclusiveMinimum: 0
+                    - type: "null"
+      responses:
+        "200":
+          description: Updated metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentWithUrls"
+        "401":
+          description: Management token is missing.
+        "403":
+          description: Management token is invalid.
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteDocument
+      summary: Delete a document using the one-time management token
+      security:
+        - manageToken: []
+      responses:
+        "204":
+          description: Document deleted.
+        "401":
+          description: Management token is missing.
+        "403":
+          description: Management token is invalid.
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/documents/{id}/raw:
+    parameters:
+      - $ref: "#/components/parameters/DocumentId"
+    get:
+      operationId: getRawMarkdown
+      summary: Download the original Markdown
+      security: []
+      responses:
+        "200":
+          description: UTF-8 Markdown.
+          content:
+            text/markdown:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/status:
+    get:
+      operationId: getStatus
+      summary: Get safe storage counters
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        "200":
+          description: Service and storage status without document content.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, storage]
+                properties:
+                  status:
+                    const: ok
+                  storage:
+                    $ref: "#/components/schemas/StorageStats"
+        "401":
+          description: Upload authentication failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Instance upload token when anonymous uploads are disabled.
+    manageToken:
+      type: http
+      scheme: bearer
+      description: Per-document token returned only by the initial create response.
+  parameters:
+    DocumentId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9_-]{6,32}$"
+  schemas:
+    CreateDocumentRequest:
+      type: object
+      required: [markdown]
+      properties:
+        markdown:
+          type: string
+          minLength: 1
+          maxLength: 2097152
+        title:
+          type: string
+          maxLength: 200
+        filename:
+          type: string
+          maxLength: 255
+          pattern: "^[^/\\\\]+\\.[mM][dD]$"
+        ttlDays:
+          oneOf:
+            - type: number
+              exclusiveMinimum: 0
+            - type: "null"
+    DocumentMeta:
+      type: object
+      required: [id, title, originalFilename, createdAt, expiresAt, size]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        originalFilename:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        size:
+          type: integer
+          minimum: 0
+    DocumentWithUrls:
+      allOf:
+        - $ref: "#/components/schemas/DocumentMeta"
+        - type: object
+          required: [url, rawUrl]
+          properties:
+            url:
+              type: string
+              format: uri
+            rawUrl:
+              type: string
+              format: uri
+    CreateDocumentResponse:
+      allOf:
+        - $ref: "#/components/schemas/DocumentWithUrls"
+        - type: object
+          required: [replayed]
+          properties:
+            replayed:
+              type: boolean
+            manageToken:
+              type: string
+              description: Present only in the initial 201 response.
+    StorageStats:
+      type: object
+      required: [documents, bytes, expiringDocuments]
+      properties:
+        documents:
+          type: integer
+        bytes:
+          type: integer
+        expiringDocuments:
+          type: integer
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+  responses:
+    BadRequest:
+      description: Input validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Document is missing or expired.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

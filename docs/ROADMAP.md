@@ -1,12 +1,12 @@
 # md-share 로드맵
 
-상태: 제안
+상태: v1.0 완료
 
 기준일: 2026-07-16
 
 이 문서는 md-share가 에이전트와 메신저에서 생성된 Markdown 결과물을 안전하게 공유하는
-서비스로 발전하기 위한 계획을 정의한다. 현재 API 계약은 [API 문서](API.md)가 정본이며,
-이 로드맵의 항목은 각 마일스톤의 완료 조건을 충족한 뒤 현재 계약에 반영한다.
+서비스로 발전하기 위한 마일스톤과 판단 근거를 정의한다. 현재 API 계약은
+[API 문서](API.md)가 정본이다.
 
 로드맵은 날짜 대신 의존성과 완료 조건으로 관리한다. 각 마일스톤은 앞선 마일스톤을
 완료한 뒤 시작하며, 범위가 바뀌면 이 문서와 해당 이슈의 비목표를 함께 갱신한다.
@@ -41,13 +41,13 @@ md-share는 Markdown 문서 한 건을 저장하고, 렌더링 링크와 원문 
 
 ## 마일스톤
 
-| 버전 | 이름 | 핵심 결과 | 선행 마일스톤 |
+| 버전 | 이름 | 핵심 결과 | 상태 |
 | --- | --- | --- | --- |
-| v0.2 | Reliable Core | 중단과 저장 실패에도 일관된 문서 저장 | 없음 |
-| v0.3 | Retry-safe Upload API | 게이트웨이가 중복 생성 없이 재시도 가능한 업로드 | v0.2 |
-| v0.4 | Channel File Sharing | `.md` 파일 선택과 채널 게이트웨이 E2E 공유 | v0.3 |
-| v0.5 | Lifecycle and Operations | 문서별 관리 권한, 삭제·만료 변경과 운영 지표 | v0.4 |
-| v1.0 | Agent-native Contract | OpenAPI와 계약 테스트로 고정된 외부 통합 표면 | v0.5 |
+| v0.2 | Reliable Core | 중단과 저장 실패에도 일관된 문서 저장 | 완료 |
+| v0.3 | Retry-safe Upload API | 게이트웨이가 중복 생성 없이 재시도 가능한 업로드 | 완료 |
+| v0.4 | Channel File Sharing | `.md` 파일 선택과 채널 게이트웨이 E2E 공유 | 완료 |
+| v0.5 | Lifecycle and Operations | 문서별 관리 권한, 삭제·만료 변경과 운영 지표 | 완료 |
+| v1.0 | Agent-native Contract | OpenAPI와 계약 테스트로 고정된 외부 통합 표면 | 완료 |
 
 ### v0.2 — Reliable Core
 

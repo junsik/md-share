@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import MarkdownView from "./MarkdownView";
 
 interface InstallTarget {
@@ -55,14 +55,10 @@ async function fetchMarkdown(pathname: string): Promise<string> {
 }
 
 function AiDialog({ onClose }: { onClose: () => void }) {
-  const [origin, setOrigin] = useState("");
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
   const [view, setView] = useState<"install" | "api">("install");
   const [apiDoc, setApiDoc] = useState<string | null>(null);
   const [apiError, setApiError] = useState(false);
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   async function openApi() {
     setView("api");

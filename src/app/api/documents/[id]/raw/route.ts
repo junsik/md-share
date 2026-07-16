@@ -12,10 +12,13 @@ export async function GET(
   if (!document) {
     return new Response("not found", { status: 404 });
   }
+  const filename = document.meta.originalFilename ?? `${document.meta.id}.md`;
+  const encodedFilename = encodeURIComponent(filename);
   return new Response(document.markdown, {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
-      "content-disposition": `inline; filename="${document.meta.id}.md"`
+      "content-disposition": `inline; filename="document.md"; filename*=UTF-8''${encodedFilename}`,
+      "x-content-type-options": "nosniff"
     }
   });
 }

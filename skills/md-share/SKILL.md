@@ -28,22 +28,29 @@ the `url` to the user or channel.
 ```bash
 curl -s -X POST "https://md-share.example.com/api/documents" \
   -H "Content-Type: application/json; charset=utf-8" \
+  -H "Idempotency-Key: <STABLE_REQUEST_KEY>" \
   --data-binary @payload.json
 ```
 
 `payload.json`:
 
 ```json
-{ "markdown": "# Title\n\n...", "ttlDays": 30 }
+{ "markdown": "# Title\n\n...", "filename": "report.md", "ttlDays": 30 }
 ```
 
-The `201` response contains `url` (rendered page — share this) and `rawUrl`
-(original markdown, for machines). Full reference: [docs/API.md](../../docs/API.md).
+The initial `201` response contains `url` (rendered page — share this), `rawUrl`
+(original markdown, for machines), and a one-time `manageToken`. A retry with the
+same idempotency key and body returns the same document with `200` and
+`replayed: true`. Full reference: [docs/API.md](../../docs/API.md).
 
 Rules:
 
 - Write the JSON to a **file** and send with `--data-binary` — inlining non-ASCII
   markdown into a shell argument corrupts it on some platforms.
+- Generate one `Idempotency-Key` per logical document and keep it unchanged across
+  timeouts and retries. Do not retry `409`; retry `503` after `Retry-After`.
+- When sharing an uploaded file, set `filename` to its basename. md-share accepts
+  `.md` only and rejects paths, invalid UTF-8, NUL bytes, and files over 2 MiB.
 - `ttlDays` is optional; omit it to use the instance default. Pick short TTLs
   (1–7) for throwaway output, longer for reports people will revisit. Content
   that must never expire belongs in a repo or wiki, not in md-share.

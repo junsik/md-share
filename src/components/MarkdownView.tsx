@@ -51,7 +51,7 @@ function remarkBrToBreak() {
 // data:text/html would be XSS). Self-contained documents legitimately embed
 // screenshots as data:image, so allow raster images on img src only:
 // clickable data: links and SVG (script-capable as a document) stay blocked.
-function urlTransform(url: string, key: string) {
+export function urlTransform(url: string, key: string) {
   if (key === "src" && /^data:image\/(png|jpeg|gif|webp);base64,/i.test(url)) {
     return url;
   }

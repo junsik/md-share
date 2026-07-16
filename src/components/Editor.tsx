@@ -50,12 +50,14 @@ def budget(days: int) -> str:
 > Tip: uploads from scripts or agents work too — see the README for the API.
 `;
 
-const EXPIRY_OPTIONS: { label: string; ttlDays?: number }[] = [
+const EXPIRY_OPTIONS: { label: string; ttlDays: number | null }[] = [
   { label: "1 day", ttlDays: 1 },
   { label: "7 days", ttlDays: 7 },
   { label: "30 days", ttlDays: 30 },
-  { label: "Keep forever" }
+  { label: "Keep forever", ttlDays: null }
 ];
+
+const MAX_MARKDOWN_BYTES = 2 * 1024 * 1024;
 
 interface ShareResult {
   id: string;
@@ -63,9 +65,19 @@ interface ShareResult {
   url: string;
   rawUrl: string;
   expiresAt: string | null;
+  manageToken?: string;
+  replayed: boolean;
 }
 
-function ShareDialog({ markdown, onClose }: { markdown: string; onClose: () => void }) {
+function ShareDialog({
+  markdown,
+  filename,
+  onClose
+}: {
+  markdown: string;
+  filename?: string;
+  onClose: () => void;
+}) {
   const [title, setTitle] = useState("");
   const [token, setToken] = useState("");
   const [expiryIndex, setExpiryIndex] = useState(2);
@@ -73,13 +85,17 @@ function ShareDialog({ markdown, onClose }: { markdown: string; onClose: () => v
   const [result, setResult] = useState<ShareResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const idempotencyKey = useRef(crypto.randomUUID());
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
     setError(null);
     try {
-      const headers: Record<string, string> = { "content-type": "application/json" };
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "idempotency-key": idempotencyKey.current
+      };
       if (token.trim()) headers.authorization = `Bearer ${token.trim()}`;
       const response = await fetch("/api/documents", {
         method: "POST",
@@ -87,6 +103,7 @@ function ShareDialog({ markdown, onClose }: { markdown: string; onClose: () => v
         body: JSON.stringify({
           markdown,
           title: title.trim() || undefined,
+          filename,
           ttlDays: EXPIRY_OPTIONS[expiryIndex].ttlDays
         })
       });
@@ -128,6 +145,14 @@ function ShareDialog({ markdown, onClose }: { markdown: string; onClose: () => v
             <a href={result.url} className="block break-all text-primary underline">
               {result.url}
             </a>
+            {result.manageToken ? (
+              <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="text-amber-200">Save this management token now. It is shown once.</p>
+                <code className="mt-1 block break-all text-xs text-foreground">
+                  {result.manageToken}
+                </code>
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -208,10 +233,13 @@ function ShareDialog({ markdown, onClose }: { markdown: string; onClose: () => v
 export default function Editor() {
   const [markdown, setMarkdown] = useState("");
   const [preview, setPreview] = useState("");
+  const [filename, setFilename] = useState<string | undefined>();
+  const [fileError, setFileError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Which pane the user is actively scrolling; blocks echo events from the
   // programmatic scroll on the other pane.
   const scrollSource = useRef<"editor" | "preview" | null>(null);
@@ -233,11 +261,14 @@ export default function Editor() {
   }
 
   useEffect(() => {
-    const draft = window.localStorage.getItem(DRAFT_KEY);
-    const initial = draft ?? DEFAULT_DOCUMENT;
-    setMarkdown(initial);
-    setPreview(initial);
-    setLoaded(true);
+    const frame = window.requestAnimationFrame(() => {
+      const draft = window.localStorage.getItem(DRAFT_KEY);
+      const initial = draft ?? DEFAULT_DOCUMENT;
+      setMarkdown(initial);
+      setPreview(initial);
+      setLoaded(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -258,13 +289,65 @@ export default function Editor() {
     URL.revokeObjectURL(anchor.href);
   }
 
+  async function openMarkdownFile(file: File) {
+    setFileError(null);
+    if (!file.name.toLowerCase().endsWith(".md")) {
+      setFileError("Only .md files are supported.");
+      return;
+    }
+    if (file.size > MAX_MARKDOWN_BYTES) {
+      setFileError(`The file exceeds ${MAX_MARKDOWN_BYTES} bytes.`);
+      return;
+    }
+    try {
+      const content = await file.text();
+      if (!content.trim() || content.includes("\u0000")) {
+        setFileError("The file must contain non-empty UTF-8 Markdown text.");
+        return;
+      }
+      setMarkdown(content);
+      setPreview(content);
+      setFilename(file.name);
+    } catch {
+      setFileError("The Markdown file could not be read.");
+    }
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const file = event.dataTransfer.files.item(0);
+    if (file) void openMarkdownFile(file);
+  }
+
   return (
-    <div className="flex h-screen flex-col">
+    <div
+      className="flex h-screen flex-col"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={handleDrop}
+    >
       <header className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
         <h1 className="text-lg font-semibold tracking-wide text-foreground">
           md-share
         </h1>
         <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,text/markdown"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.item(0);
+              if (file) void openMarkdownFile(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded border border-border bg-muted px-4 py-1.5 text-sm text-foreground hover:border-muted-foreground"
+          >
+            Open .md
+          </button>
           <AiButton />
           <button
             type="button"
@@ -282,6 +365,15 @@ export default function Editor() {
           </button>
         </div>
       </header>
+      {fileError ? (
+        <p className="border-b border-red-500/30 bg-red-500/10 px-6 py-2 text-sm text-red-300">
+          {fileError}
+        </p>
+      ) : filename ? (
+        <p className="border-b border-border bg-muted px-6 py-2 text-xs text-muted-foreground">
+          Loaded {filename}
+        </p>
+      ) : null}
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
         <textarea
           ref={editorRef}
@@ -301,7 +393,11 @@ export default function Editor() {
         </div>
       </div>
       {dialogOpen ? (
-        <ShareDialog markdown={markdown} onClose={() => setDialogOpen(false)} />
+        <ShareDialog
+          markdown={markdown}
+          filename={filename}
+          onClose={() => setDialogOpen(false)}
+        />
       ) : null}
     </div>
   );

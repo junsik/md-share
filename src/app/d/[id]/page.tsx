@@ -14,7 +14,18 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const document = await getDocument(id);
-  return { title: document ? `${document.meta.title} | md-share` : "md-share" };
+  if (!document) return { title: "md-share" };
+  const title = `${document.meta.title} | md-share`;
+  const description = "A Markdown document shared with md-share.";
+  return {
+    title,
+    description,
+    openGraph: {
+      type: "article",
+      title,
+      description
+    }
+  };
 }
 
 function formatUtc(iso: string): string {

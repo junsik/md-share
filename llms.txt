@@ -9,6 +9,8 @@
 - [API reference](docs/API.md): endpoints, auth modes, request/response schemas, error codes, retention, what renders
 - [Agent skill](skills/md-share/SKILL.md): installable instructions teaching an AI agent to publish markdown through md-share
 - [README](README.md): overview, configuration, deployment
+- [OpenAPI](/openapi.yaml): machine-readable v1.0 HTTP contract
+- [Roadmap](docs/ROADMAP.md): evidence, milestones, completion criteria
 
 ## Optional
 
