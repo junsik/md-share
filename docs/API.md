@@ -130,6 +130,19 @@ curl -X DELETE https://md-share.example.com/api/documents/{id} \
 
 성공하면 `204`다. 이후 렌더링, 메타데이터와 원문 URL은 모두 `404`를 반환한다.
 
+### 브라우저 `My documents`
+
+웹 편집기에서 새 링크를 만들면 브라우저는 공개 메타데이터와 문서별 `manageToken`을 현재
+origin의 local storage에 저장한다. Markdown 본문과 업로드용 bearer token은 저장하지
+않는다. `My documents`는 이 브라우저에 저장된 문서만 표시하며 공개 메타데이터 새로 고침,
+만료 변경, 영구 삭제와 로컬 관리 권한 제거를 제공한다.
+
+이 기능은 사용자 계정이나 관리자 목록이 아니다. 공유 URL에는 `manageToken`이 들어가지
+않으며 `/d/{id}` 접속자는 관리 UI나 관리 권한을 받지 않는다. 다른 브라우저 프로필에서는
+같은 목록을 볼 수 없고, 브라우저 데이터를 지우거나 `Forget access`를 실행하면 서버에서
+권한을 복구할 수 없다. local storage를 읽을 수 있는 같은 origin의 JavaScript도 관리
+token에 접근할 수 있으므로 운영자는 같은 origin에 신뢰하지 않는 코드를 제공하지 않는다.
+
 ## 운영 상태
 
 ### `GET /api/status`

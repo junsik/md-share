@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { loadOwnedDocuments, rememberOwnedDocument } from "@/lib/owned-documents";
 import AiButton from "./AiButton";
 import MarkdownView from "./MarkdownView";
+import OwnedDocumentsDialog from "./OwnedDocumentsDialog";
 
 const DRAFT_KEY = "md-share:draft:v2";
 
@@ -62,21 +64,37 @@ const MAX_MARKDOWN_BYTES = 2 * 1024 * 1024;
 interface ShareResult {
   id: string;
   title: string;
+  originalFilename?: string;
+  createdAt: string;
   url: string;
   rawUrl: string;
   expiresAt: string | null;
+  size: number;
   manageToken?: string;
   replayed: boolean;
+}
+
+function uploadError(value: unknown, status: number): string {
+  if (typeof value === "string" && value) return value;
+  if (value && typeof value === "object" && "message" in value) {
+    const message = (value as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return `Upload failed (HTTP ${status})`;
 }
 
 function ShareDialog({
   markdown,
   filename,
-  onClose
+  onClose,
+  onOwnedDocumentSaved,
+  onOpenOwnedDocuments
 }: {
   markdown: string;
   filename?: string;
   onClose: () => void;
+  onOwnedDocumentSaved: () => void;
+  onOpenOwnedDocuments: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [token, setToken] = useState("");
@@ -85,6 +103,10 @@ function ShareDialog({
   const [result, setResult] = useState<ShareResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
+  const [ownershipState, setOwnershipState] = useState<
+    "saved" | "replayed" | "storage-failed" | null
+  >(null);
   const idempotencyKey = useRef(crypto.randomUUID());
 
   async function submit(event: React.FormEvent) {
@@ -107,12 +129,37 @@ function ShareDialog({
           ttlDays: EXPIRY_OPTIONS[expiryIndex].ttlDays
         })
       });
-      const body = (await response.json()) as ShareResult & { error?: string };
+      const body = (await response.json()) as ShareResult & {
+        error?: string | { code?: string; message?: string };
+      };
       if (!response.ok) {
-        setError(body.error ?? `Upload failed (HTTP ${response.status})`);
+        setError(uploadError(body.error, response.status));
         return;
       }
       setResult(body);
+      if (body.manageToken) {
+        try {
+          rememberOwnedDocument(window.localStorage, {
+            id: body.id,
+            title: body.title,
+            ...(body.originalFilename
+              ? { originalFilename: body.originalFilename }
+              : {}),
+            createdAt: body.createdAt,
+            expiresAt: body.expiresAt,
+            size: body.size,
+            url: body.url,
+            rawUrl: body.rawUrl,
+            manageToken: body.manageToken
+          });
+          setOwnershipState("saved");
+          onOwnedDocumentSaved();
+        } catch {
+          setOwnershipState("storage-failed");
+        }
+      } else {
+        setOwnershipState("replayed");
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Upload request failed.");
     } finally {
@@ -129,31 +176,69 @@ function ShareDialog({
     }
   }
 
+  async function copyRecoveryToken(token: string) {
+    try {
+      await navigator.clipboard.writeText(token);
+      setRecoveryCopied(true);
+    } catch {
+      setRecoveryCopied(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-document-title"
         className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-foreground">Share document</h2>
+        <h2 id="share-document-title" className="text-lg font-semibold text-foreground">
+          Share document
+        </h2>
         {result ? (
           <div className="mt-4 space-y-3 text-sm">
             <p className="font-medium text-foreground">{result.title}</p>
             <a href={result.url} className="block break-all text-primary underline">
               {result.url}
             </a>
-            {result.manageToken ? (
+            {ownershipState === "saved" ? (
+              <div className="rounded border border-emerald-500/40 bg-emerald-500/10 p-3">
+                <p className="text-emerald-200">
+                  Management access is saved only in this browser. It is not part of the
+                  shared link.
+                </p>
+              </div>
+            ) : ownershipState === "storage-failed" && result.manageToken ? (
               <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3">
-                <p className="text-amber-200">Save this management token now. It is shown once.</p>
-                <code className="mt-1 block break-all text-xs text-foreground">
+                <p className="text-amber-100">
+                  This browser could not save management access. Copy the one-time recovery
+                  token before closing.
+                </p>
+                <code className="mt-2 block select-all break-all rounded bg-black/30 p-2 text-xs text-foreground">
                   {result.manageToken}
                 </code>
+                <button
+                  type="button"
+                  onClick={() => copyRecoveryToken(result.manageToken ?? "")}
+                  className="mt-2 rounded border border-amber-400/50 px-3 py-1.5 text-xs font-medium text-amber-100"
+                >
+                  {recoveryCopied ? "Recovery token copied" : "Copy recovery token"}
+                </button>
+              </div>
+            ) : ownershipState === "replayed" ? (
+              <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="text-amber-100">
+                  The share link was recovered from a safe retry, but its one-time management
+                  token is no longer available.
+                </p>
               </div>
             ) : null}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => copyLink(result.url)}
@@ -161,6 +246,15 @@ function ShareDialog({
               >
                 {copied ? "Copied" : "Copy link"}
               </button>
+              {ownershipState === "saved" ? (
+                <button
+                  type="button"
+                  onClick={onOpenOwnedDocuments}
+                  className="rounded border border-primary/50 px-3 py-1.5 text-sm text-primary hover:bg-primary/10"
+                >
+                  Open My documents
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={onClose}
@@ -237,12 +331,22 @@ export default function Editor() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [ownedDialogOpen, setOwnedDialogOpen] = useState(false);
+  const [ownedDocumentCount, setOwnedDocumentCount] = useState(0);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Which pane the user is actively scrolling; blocks echo events from the
   // programmatic scroll on the other pane.
   const scrollSource = useRef<"editor" | "preview" | null>(null);
+
+  const refreshOwnedDocumentCount = useCallback(() => {
+    try {
+      setOwnedDocumentCount(loadOwnedDocuments(window.localStorage).length);
+    } catch {
+      setOwnedDocumentCount(0);
+    }
+  }, []);
 
   function syncScroll(source: "editor" | "preview") {
     if (scrollSource.current && scrollSource.current !== source) return;
@@ -270,6 +374,18 @@ export default function Editor() {
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(refreshOwnedDocumentCount);
+    function onStorage() {
+      refreshOwnedDocumentCount();
+    }
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [refreshOwnedDocumentCount]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -325,11 +441,11 @@ export default function Editor() {
       onDragOver={(event) => event.preventDefault()}
       onDrop={handleDrop}
     >
-      <header className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
+      <header className="flex flex-col gap-3 border-b border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h1 className="text-lg font-semibold tracking-wide text-foreground">
           md-share
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -349,6 +465,18 @@ export default function Editor() {
             Open .md
           </button>
           <AiButton />
+          <button
+            type="button"
+            onClick={() => setOwnedDialogOpen(true)}
+            className="rounded border border-border bg-muted px-4 py-1.5 text-sm text-foreground hover:border-muted-foreground"
+          >
+            My documents
+            {ownedDocumentCount > 0 ? (
+              <span className="ml-1.5 rounded-full bg-primary/20 px-1.5 py-0.5 text-xs text-primary">
+                {ownedDocumentCount}
+              </span>
+            ) : null}
+          </button>
           <button
             type="button"
             onClick={download}
@@ -397,6 +525,17 @@ export default function Editor() {
           markdown={markdown}
           filename={filename}
           onClose={() => setDialogOpen(false)}
+          onOwnedDocumentSaved={refreshOwnedDocumentCount}
+          onOpenOwnedDocuments={() => {
+            setDialogOpen(false);
+            setOwnedDialogOpen(true);
+          }}
+        />
+      ) : null}
+      {ownedDialogOpen ? (
+        <OwnedDocumentsDialog
+          onClose={() => setOwnedDialogOpen(false)}
+          onDocumentsChange={setOwnedDocumentCount}
         />
       ) : null}
     </div>

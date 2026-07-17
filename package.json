@@ -1,6 +1,6 @@
 {
   "name": "md-share",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Self-hostable markdown rendering and sharing service — upload markdown, get a shareable rendered link",
   "license": "MIT",
   "author": "junsik",
@@ -17,7 +17,9 @@
     "start": "next start",
     "test": "vitest run",
     "lint": "eslint",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "ui-guide:capture": "pnpm build && node tools/ui-guide/capture.mjs",
+    "ui-guide:verify": "pnpm build && node tools/ui-guide/capture.mjs --verify"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
@@ -37,6 +39,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "playwright": "1.61.1",
     "tailwindcss": "^4",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
