@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import AiButton from "@/components/AiButton";
 import MarkdownView from "@/components/MarkdownView";
+import { hasLeadingH1 } from "@/lib/markdown-structure";
 import { getDocument } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -38,11 +39,23 @@ export default async function DocumentPage({ params }: PageProps) {
   if (!document) notFound();
 
   const { meta } = document;
+  const markdownOwnsTitle = hasLeadingH1(document.markdown);
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
       <header className="mb-8 border-b border-border pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-foreground">{meta.title}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            {!markdownOwnsTitle ? (
+              <h1 className="text-2xl font-semibold text-foreground">{meta.title}</h1>
+            ) : null}
+            <p
+              data-document-timestamps
+              className={`${markdownOwnsTitle ? "" : "mt-2 "}text-sm text-muted-foreground`}
+            >
+              Created {formatUtc(meta.createdAt)}
+              {meta.expiresAt ? ` · expires ${formatUtc(meta.expiresAt)}` : ""}
+            </p>
+          </div>
           <nav className="flex items-center gap-3 text-sm">
             <AiButton />
             <a
@@ -59,10 +72,6 @@ export default async function DocumentPage({ params }: PageProps) {
             </Link>
           </nav>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Created {formatUtc(meta.createdAt)}
-          {meta.expiresAt ? ` · expires ${formatUtc(meta.expiresAt)}` : ""}
-        </p>
       </header>
       <main className="rounded-xl border border-border bg-card p-8 shadow-sm">
         <MarkdownView markdown={document.markdown} />

@@ -22,7 +22,7 @@ docker run -d --name md-share \
   -e MD_SHARE_ANONYMOUS_UPLOAD_LIMIT="20" \
   -e MD_SHARE_ANONYMOUS_UPLOAD_GLOBAL_LIMIT="200" \
   -e MD_SHARE_PUBLIC_BASE_URL="https://md-share.example.com" \
-  ghcr.io/junsik/md-share:1.3.1
+  ghcr.io/junsik/md-share:1.3.2
 ```
 
 TLS 종료 proxy는 공개 host와 protocol을 전달해야 한다. 전달할 수 없으면
