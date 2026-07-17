@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: md-share API
-  version: 1.1.0
+  version: 1.2.0
   description: Store immutable Markdown documents and return rendered share links.
   license:
     name: MIT
@@ -14,7 +14,7 @@ paths:
       operationId: createDocument
       summary: Upload a Markdown document
       security:
-        - bearerAuth: []
+        - operatorToken: []
         - {}
       parameters:
         - in: header
@@ -47,6 +47,12 @@ paths:
                 $ref: "#/components/schemas/CreateDocumentResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Upload authentication failed when anonymous creation is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: The idempotency key was used with another request.
           content:
@@ -65,6 +71,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "ANONYMOUS_UPLOAD_RATE_LIMITED: per-client or instance upload limit exceeded."
+          headers:
+            Retry-After:
+              schema:
+                type: string
+            X-RateLimit-Limit:
+              schema:
+                type: string
+            X-RateLimit-Remaining:
+              schema:
+                type: string
+            X-RateLimit-Reset:
+              schema:
+                type: string
+            X-RateLimit-Scope:
+              schema:
+                type: string
+                enum: [client, global]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "503":
           description: Upload authentication is not configured, storage failed, or a key is busy.
           headers:
@@ -79,8 +108,7 @@ paths:
       operationId: listDocuments
       summary: List recent active documents
       security:
-        - bearerAuth: []
-        - {}
+        - operatorToken: []
       responses:
         "200":
           description: Up to 50 documents, newest first.
@@ -95,7 +123,13 @@ paths:
                     items:
                       $ref: "#/components/schemas/DocumentWithUrls"
         "401":
-          description: Upload authentication failed.
+          description: "OPERATOR_AUTH_FAILED: operator authentication failed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Operator authentication is not configured.
           content:
             application/json:
               schema:
@@ -149,9 +183,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteDocument
-      summary: Delete a document using the one-time management token
+      summary: Delete a document using its management token or the operator token
       security:
         - manageToken: []
+        - operatorToken: []
       responses:
         "204":
           description: Document deleted.
@@ -182,8 +217,7 @@ paths:
       operationId: getStatus
       summary: Get safe storage counters
       security:
-        - bearerAuth: []
-        - {}
+        - operatorToken: []
       responses:
         "200":
           description: Service and storage status without document content.
@@ -198,17 +232,23 @@ paths:
                   storage:
                     $ref: "#/components/schemas/StorageStats"
         "401":
-          description: Upload authentication failed.
+          description: "OPERATOR_AUTH_FAILED: operator authentication failed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Operator authentication is not configured.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
-    bearerAuth:
+    operatorToken:
       type: http
       scheme: bearer
-      description: Instance upload token when anonymous uploads are disabled.
+      description: Instance operator token for list, status, forced deletion, and authenticated uploads.
     manageToken:
       type: http
       scheme: bearer

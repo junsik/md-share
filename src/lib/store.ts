@@ -412,6 +412,15 @@ export async function deleteDocument(
   return { status: "ok", value: null };
 }
 
+export async function deleteDocumentAsOperator(
+  id: string
+): Promise<ManagementResult<null>> {
+  const meta = await readStoredMeta(id);
+  if (!meta || isExpired(meta)) return { status: "not_found" };
+  await removeDocumentFiles(id);
+  return { status: "ok", value: null };
+}
+
 export async function getStorageStats(): Promise<StorageStats> {
   const documents = await listDocuments(Number.MAX_SAFE_INTEGER);
   return {

@@ -86,12 +86,14 @@ function uploadError(value: unknown, status: number): string {
 function ShareDialog({
   markdown,
   filename,
+  anonymousUploads,
   onClose,
   onOwnedDocumentSaved,
   onOpenOwnedDocuments
 }: {
   markdown: string;
   filename?: string;
+  anonymousUploads: boolean;
   onClose: () => void;
   onOwnedDocumentSaved: () => void;
   onOpenOwnedDocuments: () => void;
@@ -276,16 +278,22 @@ function ShareDialog({
                 className="w-full rounded border border-border bg-background px-3 py-2 text-foreground outline-none focus:border-primary"
               />
             </label>
-            <label className="block">
-              <span className="mb-1 block text-muted-foreground">Upload token</span>
-              <input
-                type="password"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder="MD_SHARE_UPLOAD_TOKEN (optional in dev)"
-                className="w-full rounded border border-border bg-background px-3 py-2 text-foreground outline-none focus:border-primary"
-              />
-            </label>
+            {anonymousUploads ? (
+              <p className="rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-200">
+                Anonymous sharing is enabled. No upload token is required.
+              </p>
+            ) : (
+              <label className="block">
+                <span className="mb-1 block text-muted-foreground">Upload token</span>
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  placeholder="MD_SHARE_UPLOAD_TOKEN"
+                  className="w-full rounded border border-border bg-background px-3 py-2 text-foreground outline-none focus:border-primary"
+                />
+              </label>
+            )}
             <label className="block">
               <span className="mb-1 block text-muted-foreground">Expires</span>
               <select
@@ -324,7 +332,7 @@ function ShareDialog({
   );
 }
 
-export default function Editor() {
+export default function Editor({ anonymousUploads }: { anonymousUploads: boolean }) {
   const [markdown, setMarkdown] = useState("");
   const [preview, setPreview] = useState("");
   const [filename, setFilename] = useState<string | undefined>();
@@ -524,6 +532,7 @@ export default function Editor() {
         <ShareDialog
           markdown={markdown}
           filename={filename}
+          anonymousUploads={anonymousUploads}
           onClose={() => setDialogOpen(false)}
           onOwnedDocumentSaved={refreshOwnedDocumentCount}
           onOpenOwnedDocuments={() => {

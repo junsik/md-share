@@ -72,13 +72,17 @@ async function stopServer(server) {
 
 async function launchBrowser() {
   const requestedChannel = process.env.PLAYWRIGHT_CHANNEL;
-  if (requestedChannel) return chromium.launch({ channel: requestedChannel, headless: true });
+  const launchOptions = {
+    headless: true,
+    args: ["--disable-gpu", "--disable-skia-runtime-opts"]
+  };
+  if (requestedChannel) return chromium.launch({ ...launchOptions, channel: requestedChannel });
   try {
-    return await chromium.launch({ headless: true });
+    return await chromium.launch(launchOptions);
   } catch (bundledError) {
     for (const channel of ["chrome", "msedge"]) {
       try {
-        return await chromium.launch({ channel, headless: true });
+        return await chromium.launch({ ...launchOptions, channel });
       } catch {
         // Try the next installed browser channel.
       }
@@ -120,6 +124,7 @@ async function verifyFile(expectedPath, actualPath, label) {
 
 let server;
 let browser;
+let completed = false;
 try {
   if (verify) {
     await rm(verifyRoot, { recursive: true, force: true });
@@ -175,8 +180,9 @@ try {
     await writeFile(guidePath, guide, "utf8");
   }
   console.log(`${verify ? "verified" : "captured"} ${scenarios.length} UI guide scenario(s)`);
+  completed = true;
 } finally {
   await browser?.close();
   await config.stop({ root, server, stopServer });
-  if (verify) await rm(verifyRoot, { recursive: true, force: true });
+  if (verify && completed) await rm(verifyRoot, { recursive: true, force: true });
 }

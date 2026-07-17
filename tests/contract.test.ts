@@ -11,8 +11,8 @@ describe("published integration contract", () => {
     const packageJson = JSON.parse(await source("package.json")) as { version: string };
     const openapi = await source("public/openapi.yaml");
 
-    expect(packageJson.version).toBe("1.1.0");
-    expect(openapi).toContain("version: 1.1.0");
+    expect(packageJson.version).toBe("1.2.0");
+    expect(openapi).toContain("version: 1.2.0");
   });
 
   it("documents every v1 endpoint in the API reference and OpenAPI", async () => {
@@ -44,5 +44,20 @@ describe("published integration contract", () => {
     expect(llms).toContain("/openapi.yaml");
     expect(llms).toContain("docs/API.md");
     expect(llms).toContain("skills/md-share/SKILL.md");
+  });
+
+  it("publishes the operational guardrail contract", async () => {
+    const api = await source("docs/API.md");
+    const openapi = await source("public/openapi.yaml");
+    const skill = await source("skills/md-share/SKILL.md");
+
+    for (const document of [api, openapi]) {
+      expect(document).toContain("ANONYMOUS_UPLOAD_RATE_LIMITED");
+      expect(document).toContain("OPERATOR_AUTH_FAILED");
+    }
+    expect(openapi).toContain("operatorToken:");
+    expect(openapi).toContain("X-RateLimit-Scope:");
+    expect(skill).toContain("429");
+    expect(skill).toContain("Retry-After");
   });
 });

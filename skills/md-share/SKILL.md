@@ -48,7 +48,8 @@ Rules:
 - Write the JSON to a **file** and send with `--data-binary` — inlining non-ASCII
   markdown into a shell argument corrupts it on some platforms.
 - Generate one `Idempotency-Key` per logical document and keep it unchanged across
-  timeouts and retries. Do not retry `409`; retry `503` after `Retry-After`.
+  timeouts and retries. Do not retry `409`; retry `429` and retryable `503` responses
+  after `Retry-After`.
 - When sharing an uploaded file, set `filename` to its basename. md-share accepts
   `.md` only and rejects paths, invalid UTF-8, NUL bytes, and files over 2 MiB.
 - `ttlDays` is optional; omit it to use the instance default. Pick short TTLs

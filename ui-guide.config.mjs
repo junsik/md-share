@@ -19,6 +19,9 @@ const config = {
       env: {
         MD_SHARE_DATA_DIR: dataDir,
         MD_SHARE_ALLOW_ANONYMOUS_UPLOADS: "true",
+        MD_SHARE_UPLOAD_TOKEN: "ui-guide-operator-token",
+        MD_SHARE_ANONYMOUS_UPLOAD_LIMIT: "100",
+        MD_SHARE_ANONYMOUS_UPLOAD_GLOBAL_LIMIT: "100",
         MD_SHARE_PUBLIC_BASE_URL: `http://127.0.0.1:${port}`,
         NEXT_TELEMETRY_DISABLED: "1"
       }

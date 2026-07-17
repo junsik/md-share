@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { deleteDocument, getDocument, updateDocumentExpiry } from "@/lib/store";
+import { hasOperatorAuth } from "@/lib/auth";
+import {
+  deleteDocument,
+  deleteDocumentAsOperator,
+  getDocument,
+  updateDocumentExpiry
+} from "@/lib/store";
 import { publicBaseUrl, shareUrls } from "@/lib/url";
 
 export const runtime = "nodejs";
@@ -72,7 +78,9 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   const token = bearerToken(request);
   if (!token) return apiError("MANAGE_AUTH_REQUIRED", "management token is required", 401);
   try {
-    const result = await deleteDocument(id, token);
+    const result = hasOperatorAuth(request)
+      ? await deleteDocumentAsOperator(id)
+      : await deleteDocument(id, token);
     if (result.status !== "ok") {
       return result.status === "not_found"
         ? apiError("DOCUMENT_NOT_FOUND", "document not found", 404)

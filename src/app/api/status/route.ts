@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { checkUploadAuth } from "@/lib/auth";
+import { checkOperatorAuth } from "@/lib/auth";
 import { getStorageStats } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = checkUploadAuth(request);
+  const auth = checkOperatorAuth(request);
   if (!auth.ok) {
     return NextResponse.json(
-      { error: { code: "UPLOAD_AUTH_FAILED", message: auth.message } },
+      { error: { code: "OPERATOR_AUTH_FAILED", message: auth.message } },
       { status: auth.status }
     );
   }

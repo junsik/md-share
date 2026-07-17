@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { checkUploadAuth } from "@/lib/auth";
+import { checkOperatorAuth, checkUploadAuth } from "@/lib/auth";
+import {
+  anonymousRateLimitHeaders,
+  checkAnonymousUploadRateLimit
+} from "@/lib/anonymous-rate-limit";
 import {
   MAX_FILENAME_LENGTH,
   MAX_TITLE_LENGTH,
@@ -188,6 +192,16 @@ export async function POST(request: Request) {
   if (!auth.ok) {
     return apiError("UPLOAD_AUTH_FAILED", auth.message, auth.status);
   }
+  const rateLimit =
+    auth.mode === "anonymous" ? checkAnonymousUploadRateLimit(request) : undefined;
+  if (rateLimit && !rateLimit.allowed) {
+    return apiError(
+      "ANONYMOUS_UPLOAD_RATE_LIMITED",
+      "anonymous upload rate limit exceeded",
+      429,
+      anonymousRateLimitHeaders(rateLimit)
+    );
+  }
   const key = idempotencyKey(request);
   if (!key.ok) {
     return apiError("INVALID_IDEMPOTENCY_KEY", key.message, 400);
@@ -214,7 +228,10 @@ export async function POST(request: Request) {
         replayed: result.replayed,
         ...(result.manageToken ? { manageToken: result.manageToken } : {})
       },
-      { status: result.replayed ? 200 : 201 }
+      {
+        status: result.replayed ? 200 : 201,
+        ...(rateLimit ? { headers: anonymousRateLimitHeaders(rateLimit) } : {})
+      }
     );
   } catch (error) {
     if (error instanceof IdempotencyConflictError) {
@@ -236,9 +253,9 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const auth = checkUploadAuth(request);
+  const auth = checkOperatorAuth(request);
   if (!auth.ok) {
-    return apiError("UPLOAD_AUTH_FAILED", auth.message, auth.status);
+    return apiError("OPERATOR_AUTH_FAILED", auth.message, auth.status);
   }
   const base = publicBaseUrl(request);
   const documents = (await listDocuments()).map((meta) => ({

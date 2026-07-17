@@ -23,6 +23,9 @@ const scenario = {
       await unique(page.getByPlaceholder("# Start writing markdown..."), "Markdown editor")
     ).fill("# Browser-owned report\n\nThis document demonstrates local management access.\n");
     await (await unique(page.getByRole("button", { name: "Share", exact: true }), "Share button")).click();
+    if ((await page.getByLabel("Upload token", { exact: true }).count()) !== 0) {
+      throw new Error("Anonymous share dialog exposes the operator token input");
+    }
     await (
       await unique(page.getByRole("textbox", { name: "Title (optional)", exact: true }), "Title input")
     ).fill("Browser-owned report");

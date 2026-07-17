@@ -3,7 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DELETE, GET as GET_DOCUMENT, PATCH } from "../src/app/api/documents/[id]/route";
-import { POST } from "../src/app/api/documents/route";
+import { GET as GET_DOCUMENTS, POST } from "../src/app/api/documents/route";
+import { GET as GET_STATUS } from "../src/app/api/status/route";
+import { resetAnonymousUploadRateLimit } from "../src/lib/anonymous-rate-limit";
 import { MAX_MARKDOWN_BYTES } from "../src/lib/store";
 
 describe.sequential("document API contract", () => {
@@ -14,12 +16,18 @@ describe.sequential("document API contract", () => {
     process.env.MD_SHARE_DATA_DIR = directory;
     process.env.MD_SHARE_ALLOW_ANONYMOUS_UPLOADS = "true";
     process.env.MD_SHARE_PUBLIC_BASE_URL = "https://share.example.test";
+    resetAnonymousUploadRateLimit();
   });
 
   afterEach(async () => {
     delete process.env.MD_SHARE_DATA_DIR;
     delete process.env.MD_SHARE_ALLOW_ANONYMOUS_UPLOADS;
+    delete process.env.MD_SHARE_UPLOAD_TOKEN;
+    delete process.env.MD_SHARE_ANONYMOUS_UPLOAD_LIMIT;
+    delete process.env.MD_SHARE_ANONYMOUS_UPLOAD_GLOBAL_LIMIT;
+    delete process.env.MD_SHARE_ANONYMOUS_UPLOAD_WINDOW_SECONDS;
     delete process.env.MD_SHARE_PUBLIC_BASE_URL;
+    resetAnonymousUploadRateLimit();
     await fs.rm(directory, { recursive: true, force: true });
   });
 
@@ -99,6 +107,57 @@ describe.sequential("document API contract", () => {
     });
   });
 
+  it("protects operational APIs while document creation stays anonymous", async () => {
+    process.env.MD_SHARE_UPLOAD_TOKEN = "operator-token-for-tests";
+    expect((await POST(jsonRequest({ markdown: "# anonymous" }, "anonymous-key"))).status).toBe(
+      201
+    );
+
+    const listDenied = await GET_DOCUMENTS(
+      new Request("http://localhost/api/documents")
+    );
+    expect(listDenied.status).toBe(401);
+    await expect(listDenied.json()).resolves.toMatchObject({
+      error: { code: "OPERATOR_AUTH_FAILED" }
+    });
+    expect((await GET_STATUS(new Request("http://localhost/api/status"))).status).toBe(401);
+
+    const headers = { authorization: "Bearer operator-token-for-tests" };
+    expect(
+      (await GET_DOCUMENTS(new Request("http://localhost/api/documents", { headers }))).status
+    ).toBe(200);
+    expect((await GET_STATUS(new Request("http://localhost/api/status", { headers }))).status).toBe(
+      200
+    );
+  });
+
+  it("rate limits anonymous callers while allowing an authenticated operator", async () => {
+    process.env.MD_SHARE_UPLOAD_TOKEN = "operator-token-for-tests";
+    process.env.MD_SHARE_ANONYMOUS_UPLOAD_LIMIT = "2";
+    process.env.MD_SHARE_ANONYMOUS_UPLOAD_GLOBAL_LIMIT = "10";
+    const request = (key: string, operator = false) =>
+      new Request("http://localhost/api/documents", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": key,
+          "x-real-ip": "192.0.2.10",
+          ...(operator ? { authorization: "Bearer operator-token-for-tests" } : {})
+        },
+        body: JSON.stringify({ markdown: `# ${key}` })
+      });
+
+    expect((await POST(request("limited-1"))).status).toBe(201);
+    expect((await POST(request("limited-2"))).status).toBe(201);
+    const limited = await POST(request("limited-3"));
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBeTruthy();
+    await expect(limited.json()).resolves.toMatchObject({
+      error: { code: "ANONYMOUS_UPLOAD_RATE_LIMITED" }
+    });
+    expect((await POST(request("operator-bypass", true))).status).toBe(201);
+  });
+
   it("exposes metadata and manages expiry and deletion with the one-time token", async () => {
     const createResponse = await POST(jsonRequest({ markdown: "# managed" }, "manage-key"));
     const created = await createResponse.json();
@@ -143,5 +202,43 @@ describe.sequential("document API contract", () => {
     expect(
       (await GET_DOCUMENT(new Request(`http://localhost/api/documents/${created.id}`), context)).status
     ).toBe(404);
+  });
+
+  it("keeps management document-scoped and lets the operator delete any document", async () => {
+    process.env.MD_SHARE_UPLOAD_TOKEN = "operator-token-for-tests";
+    const first = await (await POST(jsonRequest({ markdown: "# first" }, "first-key"))).json();
+    const second = await (await POST(jsonRequest({ markdown: "# second" }, "second-key"))).json();
+    const secondContext = { params: Promise.resolve({ id: second.id as string }) };
+
+    const crossDocument = await DELETE(
+      new Request(`http://localhost/api/documents/${second.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${first.manageToken}` }
+      }),
+      secondContext
+    );
+    expect(crossDocument.status).toBe(403);
+
+    const operatorPatch = await PATCH(
+      new Request(`http://localhost/api/documents/${second.id}`, {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer operator-token-for-tests",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ ttlDays: null })
+      }),
+      secondContext
+    );
+    expect(operatorPatch.status).toBe(403);
+
+    const operatorDelete = await DELETE(
+      new Request(`http://localhost/api/documents/${second.id}`, {
+        method: "DELETE",
+        headers: { authorization: "Bearer operator-token-for-tests" }
+      }),
+      secondContext
+    );
+    expect(operatorDelete.status).toBe(204);
   });
 });
