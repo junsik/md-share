@@ -8,7 +8,7 @@ const scenario = {
   id: "anonymous-sharing",
   title: "업로드 token 없이 공유",
   description:
-    "익명 공유가 설정된 웹 편집기는 운영자 token을 사용자에게 요구하지 않고 문서별 관리 권한만 브라우저에 저장한다.",
+    "익명 공유가 설정된 웹 편집기는 자동화 token을 사용자에게 요구하지 않고 문서별 관리 권한만 브라우저에 저장한다.",
   guide: [
     "편집기에서 Markdown을 작성하고 Share를 누른다.",
     "익명 공유 안내를 확인한다. Upload token 입력란은 표시되지 않는다.",
@@ -24,7 +24,7 @@ const scenario = {
     await (await unique(page.getByRole("button", { name: "Share", exact: true }), "Share button")).click();
     await page.getByRole("dialog", { name: "Share document", exact: true }).waitFor();
     if ((await page.getByLabel("Upload token", { exact: true }).count()) !== 0) {
-      throw new Error("Anonymous share dialog exposes the operator token input");
+      throw new Error("Anonymous share dialog exposes the automation token input");
     }
     await page
       .getByText("Anonymous sharing is enabled. No upload token is required.", { exact: true })

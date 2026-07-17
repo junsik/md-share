@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { hasOperatorAuth } from "@/lib/auth";
+import { hasValidAdminCsrf, readAdminSession } from "@/lib/admin-auth";
+import { hasOperatorBearerAuth } from "@/lib/auth";
 import {
   deleteDocument,
   deleteDocumentAsOperator,
@@ -75,12 +76,19 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
 export async function DELETE(request: Request, { params }: RouteContext) {
   const { id } = await params;
+  const adminSession = readAdminSession(request);
+  if (adminSession && !hasValidAdminCsrf(request)) {
+    return apiError("ADMIN_CSRF_FAILED", "administrator CSRF token is invalid", 403);
+  }
+  const operatorBearer = hasOperatorBearerAuth(request);
   const token = bearerToken(request);
-  if (!token) return apiError("MANAGE_AUTH_REQUIRED", "management token is required", 401);
+  if (!adminSession && !operatorBearer && !token) {
+    return apiError("MANAGE_AUTH_REQUIRED", "management token is required", 401);
+  }
   try {
-    const result = hasOperatorAuth(request)
+    const result = adminSession || operatorBearer
       ? await deleteDocumentAsOperator(id)
-      : await deleteDocument(id, token);
+      : await deleteDocument(id, token as string);
     if (result.status !== "ok") {
       return result.status === "not_found"
         ? apiError("DOCUMENT_NOT_FOUND", "document not found", 404)

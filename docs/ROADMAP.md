@@ -1,6 +1,6 @@
 # md-share 로드맵
 
-상태: v1.2 완료
+상태: v1.3 완료
 
 기준일: 2026-07-17
 
@@ -50,6 +50,7 @@ md-share는 Markdown 문서 한 건을 저장하고, 렌더링 링크와 원문 
 | v1.0 | Agent-native Contract | OpenAPI와 계약 테스트로 고정된 외부 통합 표면 | 완료 |
 | v1.1 | Browser-owned Documents | 공유 URL과 분리된 브라우저 로컬 문서 관리 | 완료 |
 | v1.2 | Operational Guardrails | 익명 생성과 운영자 권한 분리 및 요청 제한 | 완료 |
+| v1.3 | Administration Console | 설치자 지정 운영자 로그인과 전체 문서 운영 화면 | 완료 |
 
 ### v0.2 — Reliable Core
 
@@ -206,6 +207,30 @@ md-share는 Markdown 문서 한 건을 저장하고, 렌더링 링크와 원문 
 - 한 문서의 manageToken과 운영자 token 권한이 테스트에서 명확히 구분된다.
 - client별·process 전체 제한, 시간창 reset과 운영자 우회 테스트가 통과한다.
 - 운영 배포에서 익명 UI, 401, 403, 429와 운영자 삭제를 실제 요청으로 확인한다.
+
+### v1.3 — Administration Console
+
+채널 게이트웨이와 결합하지 않는 운영자용 로그인과 전체 문서 관리 화면을 제공한다.
+
+범위:
+
+- 설치자가 운영 환경의 secret으로 관리자 ID와 12자 이상의 비밀번호를 지정한다.
+- 관리자 비밀번호를 브라우저 저장소에 남기지 않고 단일 process memory의 만료되는
+  HttpOnly 세션으로 교환한다.
+- 로그인 시도에 client별 제한과 process 전체 제한을 함께 적용한다.
+- 운영 콘솔은 저장량과 최근 문서 메타데이터만 표시하고 Markdown 본문은 가져오지 않는다.
+- 관리자 세션의 문서 삭제와 로그아웃 요청은 CSRF token으로 보호한다.
+- 관리자 세션은 임의 문서를 삭제할 수 있지만 만료 변경과 인증된 업로드 권한은 받지 않는다.
+- headless 자동화를 위한 bearer token은 설치자가 필요할 때만 별도로 설정한다.
+
+완료 조건:
+
+- 이미지와 source에 관리자 ID, 비밀번호 또는 bearer token 기본값이 없다.
+- 올바른 ID와 비밀번호로 로그인하고 잘못된 값과 반복 시도는 안정적인 오류로 거절된다.
+- 브라우저 local storage와 API 응답에 관리자 비밀번호와 session cookie가 노출되지 않는다.
+- 관리자 세션 없는 목록·상태 조회와 CSRF 없는 삭제 요청이 거절된다.
+- 운영 콘솔에서 메타데이터 조회, 검색, 삭제와 로그아웃 UI 시나리오가 통과한다.
+- 다우오피스 gateway를 포함한 채널별 로직이 md-share source와 계약에 추가되지 않는다.
 
 ## 의사결정 게이트
 

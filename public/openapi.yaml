@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: md-share API
-  version: 1.2.0
+  version: 1.3.0
   description: Store immutable Markdown documents and return rendered share links.
   license:
     name: MIT
@@ -108,6 +108,7 @@ paths:
       operationId: listDocuments
       summary: List recent active documents
       security:
+        - adminSession: []
         - operatorToken: []
       responses:
         "200":
@@ -183,17 +184,24 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteDocument
-      summary: Delete a document using its management token or the operator token
+      summary: Delete a document using document, administrator, or automation authority
       security:
         - manageToken: []
+        - adminSession: []
         - operatorToken: []
+      parameters:
+        - in: header
+          name: X-MD-Share-CSRF
+          schema:
+            type: string
+          description: Required when authenticating with the administrator session cookie.
       responses:
         "204":
           description: Document deleted.
         "401":
           description: Management token is missing.
         "403":
-          description: Management token is invalid.
+          description: Management token or administrator CSRF token is invalid.
         "404":
           $ref: "#/components/responses/NotFound"
   /api/documents/{id}/raw:
@@ -217,6 +225,7 @@ paths:
       operationId: getStatus
       summary: Get safe storage counters
       security:
+        - adminSession: []
         - operatorToken: []
       responses:
         "200":
@@ -243,12 +252,126 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/admin/session:
+    post:
+      operationId: createAdminSession
+      summary: Exchange installer-defined administrator credentials for a browser session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: Administrator session created and HttpOnly cookie set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "400":
+          description: Login request is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "ADMIN_AUTH_FAILED: credentials are invalid."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Login request exceeds 4096 bytes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "ADMIN_LOGIN_RATE_LIMITED: client or process login limit exceeded."
+          headers:
+            Retry-After:
+              schema:
+                type: string
+            X-RateLimit-Limit:
+              schema:
+                type: string
+            X-RateLimit-Remaining:
+              schema:
+                type: string
+            X-RateLimit-Reset:
+              schema:
+                type: string
+            X-RateLimit-Scope:
+              schema:
+                type: string
+                enum: [client, global]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "ADMIN_AUTH_NOT_CONFIGURED: administrator credentials are unavailable."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: getAdminSession
+      summary: Read the current administrator session and CSRF token
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Current administrator session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "401":
+          description: "ADMIN_SESSION_REQUIRED: administrator session is missing or expired."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAdminSession
+      summary: Sign out the current administrator session
+      security:
+        - adminSession: []
+      parameters:
+        - in: header
+          name: X-MD-Share-CSRF
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Session revoked and cookie cleared.
+        "401":
+          description: "ADMIN_SESSION_REQUIRED: administrator session is missing or expired."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "ADMIN_CSRF_FAILED: administrator CSRF token is invalid."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: md_share_admin_session
+      description: Temporary HttpOnly administrator browser session.
     operatorToken:
       type: http
       scheme: bearer
-      description: Instance operator token for list, status, forced deletion, and authenticated uploads.
+      description: Optional automation token for list, status, forced deletion, and authenticated uploads.
     manageToken:
       type: http
       scheme: bearer
@@ -262,6 +385,33 @@ components:
         type: string
         pattern: "^[A-Za-z0-9_-]{6,32}$"
   schemas:
+    AdminLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 128
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+    AdminSession:
+      type: object
+      required: [authenticated, username, expiresAt, csrfToken]
+      properties:
+        authenticated:
+          const: true
+        username:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        csrfToken:
+          type: string
+          description: Send as X-MD-Share-CSRF for administrator mutations.
     CreateDocumentRequest:
       type: object
       required: [markdown]

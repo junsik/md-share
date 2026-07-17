@@ -11,8 +11,8 @@ describe("published integration contract", () => {
     const packageJson = JSON.parse(await source("package.json")) as { version: string };
     const openapi = await source("public/openapi.yaml");
 
-    expect(packageJson.version).toBe("1.2.0");
-    expect(openapi).toContain("version: 1.2.0");
+    expect(packageJson.version).toBe("1.3.0");
+    expect(openapi).toContain("version: 1.3.0");
   });
 
   it("documents every v1 endpoint in the API reference and OpenAPI", async () => {
@@ -22,7 +22,8 @@ describe("published integration contract", () => {
       "/api/documents:",
       "/api/documents/{id}:",
       "/api/documents/{id}/raw:",
-      "/api/status:"
+      "/api/status:",
+      "/api/admin/session:"
     ];
 
     for (const endpoint of endpoints) {
@@ -54,8 +55,11 @@ describe("published integration contract", () => {
     for (const document of [api, openapi]) {
       expect(document).toContain("ANONYMOUS_UPLOAD_RATE_LIMITED");
       expect(document).toContain("OPERATOR_AUTH_FAILED");
+      expect(document).toContain("ADMIN_AUTH_FAILED");
+      expect(document).toContain("ADMIN_CSRF_FAILED");
     }
     expect(openapi).toContain("operatorToken:");
+    expect(openapi).toContain("adminSession:");
     expect(openapi).toContain("X-RateLimit-Scope:");
     expect(skill).toContain("429");
     expect(skill).toContain("Retry-After");

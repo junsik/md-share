@@ -2,10 +2,12 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { POST as POST_ADMIN_SESSION } from "../src/app/api/admin/session/route";
 import { DELETE, GET as GET_DOCUMENT, PATCH } from "../src/app/api/documents/[id]/route";
 import { GET as GET_DOCUMENTS, POST } from "../src/app/api/documents/route";
 import { GET as GET_STATUS } from "../src/app/api/status/route";
 import { resetAnonymousUploadRateLimit } from "../src/lib/anonymous-rate-limit";
+import { resetAdminAuthState } from "../src/lib/admin-auth";
 import { MAX_MARKDOWN_BYTES } from "../src/lib/store";
 
 describe.sequential("document API contract", () => {
@@ -17,17 +19,21 @@ describe.sequential("document API contract", () => {
     process.env.MD_SHARE_ALLOW_ANONYMOUS_UPLOADS = "true";
     process.env.MD_SHARE_PUBLIC_BASE_URL = "https://share.example.test";
     resetAnonymousUploadRateLimit();
+    resetAdminAuthState();
   });
 
   afterEach(async () => {
     delete process.env.MD_SHARE_DATA_DIR;
     delete process.env.MD_SHARE_ALLOW_ANONYMOUS_UPLOADS;
     delete process.env.MD_SHARE_UPLOAD_TOKEN;
+    delete process.env.MD_SHARE_ADMIN_USERNAME;
+    delete process.env.MD_SHARE_ADMIN_PASSWORD;
     delete process.env.MD_SHARE_ANONYMOUS_UPLOAD_LIMIT;
     delete process.env.MD_SHARE_ANONYMOUS_UPLOAD_GLOBAL_LIMIT;
     delete process.env.MD_SHARE_ANONYMOUS_UPLOAD_WINDOW_SECONDS;
     delete process.env.MD_SHARE_PUBLIC_BASE_URL;
     resetAnonymousUploadRateLimit();
+    resetAdminAuthState();
     await fs.rm(directory, { recursive: true, force: true });
   });
 
@@ -240,5 +246,70 @@ describe.sequential("document API contract", () => {
       secondContext
     );
     expect(operatorDelete.status).toBe(204);
+  });
+
+  it("uses the administrator session for operational reads and CSRF-protected deletion only", async () => {
+    process.env.MD_SHARE_ADMIN_USERNAME = "operations";
+    process.env.MD_SHARE_ADMIN_PASSWORD = "installer-chosen-password";
+    const created = await (
+      await POST(jsonRequest({ markdown: "# administrator managed" }, "admin-managed-key"))
+    ).json();
+    const context = { params: Promise.resolve({ id: created.id as string }) };
+
+    const login = await POST_ADMIN_SESSION(
+      new Request("http://localhost/api/admin/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "operations",
+          password: "installer-chosen-password"
+        })
+      })
+    );
+    const loginBody = await login.json();
+    const cookie = (login.headers.get("set-cookie") ?? "").split(";", 1)[0];
+    expect(cookie).toContain("md_share_admin_session=");
+
+    expect(
+      (
+        await GET_DOCUMENTS(
+          new Request("http://localhost/api/documents", { headers: { cookie } })
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (await GET_STATUS(new Request("http://localhost/api/status", { headers: { cookie } }))).status
+    ).toBe(200);
+
+    const patchDenied = await PATCH(
+      new Request(`http://localhost/api/documents/${created.id}`, {
+        method: "PATCH",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify({ ttlDays: null })
+      }),
+      context
+    );
+    expect(patchDenied.status).toBe(401);
+
+    const csrfDenied = await DELETE(
+      new Request(`http://localhost/api/documents/${created.id}`, {
+        method: "DELETE",
+        headers: { cookie }
+      }),
+      context
+    );
+    expect(csrfDenied.status).toBe(403);
+    await expect(csrfDenied.json()).resolves.toMatchObject({
+      error: { code: "ADMIN_CSRF_FAILED" }
+    });
+
+    const deleted = await DELETE(
+      new Request(`http://localhost/api/documents/${created.id}`, {
+        method: "DELETE",
+        headers: { cookie, "x-md-share-csrf": loginBody.csrfToken }
+      }),
+      context
+    );
+    expect(deleted.status).toBe(204);
   });
 });
