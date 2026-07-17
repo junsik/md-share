@@ -25,7 +25,7 @@ describe.sequential("administrator session authentication", () => {
     resetAdminAuthState();
   });
 
-  it("requires installer-provided credentials with a sufficiently strong password", async () => {
+  it("requires installer-provided credentials with an eight-character minimum", async () => {
     const missing = await POST_SESSION(loginRequest("admin", "not-configured"));
     expect(missing.status).toBe(503);
     await expect(missing.json()).resolves.toMatchObject({
@@ -33,8 +33,11 @@ describe.sequential("administrator session authentication", () => {
     });
 
     process.env.MD_SHARE_ADMIN_USERNAME = "operations";
-    process.env.MD_SHARE_ADMIN_PASSWORD = "too-short";
-    expect((await POST_SESSION(loginRequest("operations", "too-short"))).status).toBe(503);
+    process.env.MD_SHARE_ADMIN_PASSWORD = "short-7";
+    expect((await POST_SESSION(loginRequest("operations", "short-7"))).status).toBe(503);
+
+    process.env.MD_SHARE_ADMIN_PASSWORD = "eight-ok";
+    expect((await POST_SESSION(loginRequest("operations", "eight-ok"))).status).toBe(200);
   });
 
   it("exchanges valid credentials for an HttpOnly session and supports CSRF-protected logout", async () => {

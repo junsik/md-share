@@ -7,6 +7,7 @@ const DEFAULT_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const DEFAULT_LOGIN_LIMIT = 5;
 const DEFAULT_GLOBAL_LOGIN_LIMIT = 50;
 const DEFAULT_LOGIN_WINDOW_SECONDS = 5 * 60;
+const MIN_ADMIN_PASSWORD_LENGTH = 8;
 const MAX_SESSIONS = 1_000;
 const MAX_LOGIN_BUCKETS = 10_000;
 
@@ -82,7 +83,12 @@ function configuredInteger(name: string, fallback: number, maximum: number): num
 function adminCredentials(): { username: string; password: string } | undefined {
   const username = process.env.MD_SHARE_ADMIN_USERNAME ?? "";
   const password = process.env.MD_SHARE_ADMIN_PASSWORD ?? "";
-  if (!username || username.length > 128 || password.length < 12 || password.length > 1_024) {
+  if (
+    !username ||
+    username.length > 128 ||
+    password.length < MIN_ADMIN_PASSWORD_LENGTH ||
+    password.length > 1_024
+  ) {
     return undefined;
   }
   return { username, password };

@@ -98,7 +98,7 @@ repo ships the integration pieces:
 | Env var | Default | Description |
 | --- | --- | --- |
 | `MD_SHARE_ADMIN_USERNAME` | (unset) | Administrator ID selected by the installer. Both administrator variables are required for web login. |
-| `MD_SHARE_ADMIN_PASSWORD` | (unset) | Installer-selected administrator password, at least 12 characters, supplied through a secret store. |
+| `MD_SHARE_ADMIN_PASSWORD` | (unset) | Installer-selected administrator password, at least 8 characters, supplied through a secret store. |
 | `MD_SHARE_ADMIN_SESSION_TTL_SECONDS` | `28800` | Administrator session lifetime, up to 7 days. Sessions stay in process memory. |
 | `MD_SHARE_ADMIN_LOGIN_LIMIT` | `5` | Login attempts allowed per client in each login window. |
 | `MD_SHARE_ADMIN_LOGIN_GLOBAL_LIMIT` | `50` | Login attempts allowed across the process in each login window. |

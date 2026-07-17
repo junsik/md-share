@@ -6,7 +6,7 @@
 ## 설치
 
 운영 이미지는 변경되지 않는 버전 tag나 digest로 고정한다. `/data`에는 영속 volume을
-연결한다. 설치자는 instance마다 관리자 ID와 12자 이상의 password를 직접 정해 secret
+연결한다. 설치자는 instance마다 관리자 ID와 8자 이상의 password를 직접 정해 secret
 store에서 다음 환경 변수로 주입한다. image와 배포 manifest에는 기본 credential이 없다.
 
 - `MD_SHARE_ADMIN_USERNAME`
@@ -22,7 +22,7 @@ docker run -d --name md-share \
   -e MD_SHARE_ANONYMOUS_UPLOAD_LIMIT="20" \
   -e MD_SHARE_ANONYMOUS_UPLOAD_GLOBAL_LIMIT="200" \
   -e MD_SHARE_PUBLIC_BASE_URL="https://md-share.example.com" \
-  ghcr.io/junsik/md-share:1.3.0
+  ghcr.io/junsik/md-share:1.3.1
 ```
 
 TLS 종료 proxy는 공개 host와 protocol을 전달해야 한다. 전달할 수 없으면

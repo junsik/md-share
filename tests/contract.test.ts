@@ -11,8 +11,8 @@ describe("published integration contract", () => {
     const packageJson = JSON.parse(await source("package.json")) as { version: string };
     const openapi = await source("public/openapi.yaml");
 
-    expect(packageJson.version).toBe("1.3.0");
-    expect(openapi).toContain("version: 1.3.0");
+    expect(packageJson.version).toBe("1.3.1");
+    expect(openapi).toContain("version: 1.3.1");
   });
 
   it("documents every v1 endpoint in the API reference and OpenAPI", async () => {
