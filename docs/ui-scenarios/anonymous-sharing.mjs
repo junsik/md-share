@@ -29,9 +29,12 @@ const scenario = {
     await page
       .getByText("Anonymous sharing is enabled. No upload token is required.", { exact: true })
       .waitFor();
-    await (
-      await unique(page.getByRole("textbox", { name: "Title (optional)", exact: true }), "Title input")
-    ).fill("Anonymous sharing");
+    const titleInput = await unique(
+      page.getByRole("textbox", { name: "Title (optional)", exact: true }),
+      "Title input"
+    );
+    await titleInput.fill("Anonymous sharing");
+    await titleInput.evaluate((element) => element.blur());
     await capture();
     await (await unique(page.getByRole("button", { name: "Cancel", exact: true }), "Cancel button")).click();
   }

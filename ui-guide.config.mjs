@@ -14,8 +14,8 @@ const config = {
     const dataDir = path.join(root, "data", "ui-guide");
     await rm(dataDir, { recursive: true, force: true });
     await mkdir(dataDir, { recursive: true });
-    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-    const server = spawnServer(command, ["start", "--hostname", "127.0.0.1", "--port", String(port)], {
+    const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
+    const server = spawnServer(process.execPath, [nextCli, "start", "--hostname", "127.0.0.1", "--port", String(port)], {
       env: {
         MD_SHARE_DATA_DIR: dataDir,
         MD_SHARE_ALLOW_ANONYMOUS_UPLOADS: "true",

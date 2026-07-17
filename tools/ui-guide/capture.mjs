@@ -137,14 +137,20 @@ try {
 
   for (const scenario of scenarios) {
     const context = await browser.newContext({
-      viewport: config.viewport,
+      viewport: scenario.viewport ?? config.viewport,
       colorScheme: "dark",
       reducedMotion: "reduce"
     });
     const page = await context.newPage();
     const errors = [];
     page.on("console", (message) => {
-      if (message.type() === "error") errors.push(`console: ${message.text()}`);
+      if (message.type() === "error") {
+        const location = message.location();
+        const source = location.url
+          ? ` (${location.url}${location.lineNumber ? `:${location.lineNumber}` : ""})`
+          : "";
+        errors.push(`console: ${message.text()}${source}`);
+      }
     });
     page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
     const screenshotPath = verify

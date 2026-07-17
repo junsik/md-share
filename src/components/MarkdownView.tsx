@@ -2,8 +2,11 @@
 
 import { isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
-import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import rehypeSlug from "rehype-slug";
+import remarkGfm from "remark-gfm";
+import type { PluggableList } from "unified";
+import { DOCUMENT_HEADING_ID_PREFIX } from "@/lib/heading-anchors";
 import MermaidBlock from "./MermaidBlock";
 
 function extractMermaidCode(children: ReactNode): string | null {
@@ -58,12 +61,32 @@ export function urlTransform(url: string, key: string) {
   return defaultUrlTransform(url);
 }
 
-export default function MarkdownView({ markdown }: { markdown: string }) {
+interface MarkdownViewProps {
+  markdown: string;
+  articleId?: string;
+  headingAnchors?: boolean;
+}
+
+export default function MarkdownView({
+  markdown,
+  articleId,
+  headingAnchors = false
+}: MarkdownViewProps) {
+  const rehypePlugins: PluggableList = [
+    [rehypeHighlight, { plainText: ["mermaid"] }]
+  ];
+  if (headingAnchors) {
+    rehypePlugins.unshift([rehypeSlug, { prefix: DOCUMENT_HEADING_ID_PREFIX }]);
+  }
+
   return (
-    <article className="prose prose-invert max-w-none prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-border prose-code:before:content-none prose-code:after:content-none">
+    <article
+      id={articleId}
+      className="prose prose-invert max-w-none prose-headings:scroll-mt-6 prose-pre:border prose-pre:border-border prose-pre:bg-[#0d1117] prose-code:before:content-none prose-code:after:content-none"
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBrToBreak]}
-        rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }]]}
+        rehypePlugins={rehypePlugins}
         components={{ pre: Pre }}
         urlTransform={urlTransform}
       >

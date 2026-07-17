@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import MarkdownView, { urlTransform } from "../src/components/MarkdownView";
+import { extractDocumentHeadings } from "../src/lib/markdown-structure";
 
 describe("safe Markdown rendering", () => {
   it("renders GFM tables and the explicit br exception", () => {
@@ -35,5 +36,28 @@ describe("safe Markdown rendering", () => {
     );
 
     expect(html).toContain("Rendering diagram");
+  });
+
+  it("adds prefixed stable heading anchors only when requested", () => {
+    const markdown = "# 문서\n\n## 같은 제목\n\n#### 같은 제목\n\n## 같은 제목";
+    const anchored = renderToStaticMarkup(
+      <MarkdownView headingAnchors markdown={markdown} />
+    );
+    const plain = renderToStaticMarkup(<MarkdownView markdown={markdown} />);
+
+    expect(anchored).toContain('id="heading-문서"');
+    expect(anchored).toContain('id="heading-같은-제목"');
+    expect(anchored).toContain('id="heading-같은-제목-1"');
+    expect(anchored).toContain('id="heading-같은-제목-2"');
+    expect(plain).not.toContain('id="heading-');
+  });
+
+  it("keeps extracted GFM table-of-contents IDs aligned with rendered headings", () => {
+    const markdown = "# 문서\n\n## ~~Old~~ New\n\n#### Old New\n\n## Old New";
+    const html = renderToStaticMarkup(<MarkdownView headingAnchors markdown={markdown} />);
+
+    for (const heading of extractDocumentHeadings(markdown)) {
+      expect(html).toContain(`id="${heading.id}"`);
+    }
   });
 });

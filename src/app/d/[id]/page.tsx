@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AiButton from "@/components/AiButton";
+import DocumentReadingNavigation from "@/components/DocumentReadingNavigation";
 import MarkdownView from "@/components/MarkdownView";
-import { hasLeadingH1 } from "@/lib/markdown-structure";
+import { extractDocumentHeadings, hasLeadingH1 } from "@/lib/markdown-structure";
 import { getDocument } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -40,9 +41,17 @@ export default async function DocumentPage({ params }: PageProps) {
 
   const { meta } = document;
   const markdownOwnsTitle = hasLeadingH1(document.markdown);
+  const headings = extractDocumentHeadings(document.markdown);
+  const showReadingNavigation = headings.length >= 3;
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
-      <header className="mb-8 border-b border-border pb-4">
+    <div className="mx-auto max-w-7xl px-6 py-10">
+      <header
+        className={`mb-8 border-b border-border pb-4 ${
+          showReadingNavigation
+            ? "mx-auto max-w-5xl xl:ml-0 xl:mr-64 xl:max-w-none"
+            : "mx-auto max-w-5xl"
+        }`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             {!markdownOwnsTitle ? (
@@ -73,9 +82,24 @@ export default async function DocumentPage({ params }: PageProps) {
           </nav>
         </div>
       </header>
-      <main className="rounded-xl border border-border bg-card p-8 shadow-sm">
-        <MarkdownView markdown={document.markdown} />
-      </main>
+      <div
+        className={
+          showReadingNavigation
+            ? "mx-auto grid w-full max-w-5xl items-start gap-6 xl:max-w-none xl:grid-cols-[minmax(0,1fr)_14rem] xl:gap-8"
+            : "mx-auto max-w-5xl"
+        }
+      >
+        {showReadingNavigation ? (
+          <DocumentReadingNavigation contentId="document-content" headings={headings} />
+        ) : null}
+        <main className="rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8 xl:col-start-1 xl:row-start-1">
+          <MarkdownView
+            articleId="document-content"
+            headingAnchors
+            markdown={document.markdown}
+          />
+        </main>
+      </div>
     </div>
   );
 }
