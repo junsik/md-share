@@ -3,7 +3,9 @@ import { promisify } from "node:util";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import pixelmatch from "pixelmatch";
 import { chromium } from "playwright";
+import { PNG } from "pngjs";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
@@ -122,6 +124,40 @@ async function verifyFile(expectedPath, actualPath, label) {
   if (!expected.equals(actual)) throw new Error(`${label} is stale: ${path.relative(root, expectedPath)}`);
 }
 
+async function verifyScreenshot(expectedPath, actualPath, label) {
+  const [expectedBuffer, actualBuffer] = await Promise.all([
+    readFile(expectedPath),
+    readFile(actualPath)
+  ]);
+  const expected = PNG.sync.read(expectedBuffer);
+  const actual = PNG.sync.read(actualBuffer);
+  if (expected.width !== actual.width || expected.height !== actual.height) {
+    throw new Error(
+      `${label} dimensions changed: ${expected.width}x${expected.height} -> ${actual.width}x${actual.height}`
+    );
+  }
+
+  const mismatchedPixels = pixelmatch(
+    expected.data,
+    actual.data,
+    null,
+    expected.width,
+    expected.height,
+    { threshold: 0.2 }
+  );
+  const mismatchRatio = mismatchedPixels / (expected.width * expected.height);
+  // Chromium rasterization and system fonts differ between the Windows capture
+  // workstation and the Linux CI container. Keep the comparison perceptual while
+  // still rejecting layout-sized changes and any viewport dimension drift.
+  const maximumMismatchRatio = 0.05;
+  if (mismatchRatio > maximumMismatchRatio) {
+    throw new Error(
+      `${label} is stale: ${path.relative(root, expectedPath)} ` +
+        `(${(mismatchRatio * 100).toFixed(2)}% pixels changed; allowed ${(maximumMismatchRatio * 100).toFixed(2)}%)`
+    );
+  }
+}
+
 let server;
 let browser;
 let completed = false;
@@ -171,7 +207,7 @@ try {
     await context.close();
     if (errors.length > 0) throw new Error(`${scenario.id} browser errors:\n${errors.join("\n")}`);
     if (verify) {
-      await verifyFile(path.join(root, scenario.screenshot), screenshotPath, `${scenario.id} screenshot`);
+      await verifyScreenshot(path.join(root, scenario.screenshot), screenshotPath, `${scenario.id} screenshot`);
     }
   }
 
